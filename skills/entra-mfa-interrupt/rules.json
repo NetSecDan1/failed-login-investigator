@@ -1,0 +1,36 @@
+{
+  "id": "entra-mfa-interrupt",
+  "title": "Sign-ins stopped at the MFA step",
+  "escalate": false,
+  "priority": 5,
+  "require": {
+    "all": [
+      {
+        "signal": "entra_failures",
+        "op": ">=",
+        "value": 3
+      },
+      {
+        "signal": "entra_mfa_interrupt_share",
+        "op": ">=",
+        "value": 0.6
+      }
+    ]
+  },
+  "support": [
+    {
+      "label": "no bad-password failures in cloud sign-ins",
+      "cond": {
+        "signal": "entra_bad_password_share",
+        "op": "==",
+        "value": 0.0
+      },
+      "weight": 2
+    }
+  ],
+  "next_steps": [
+    "If these were your own sign-ins, complete the MFA prompt when it appears. No password change is needed.",
+    "If {account} is a service or automation account, it cannot answer an MFA prompt. Raise a request with the identity team to review how it should authenticate.",
+    "If you were not signing in at those times, contact the CSOC now. An MFA prompt you did not start means the correct password was entered by someone else."
+  ]
+}

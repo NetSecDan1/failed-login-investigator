@@ -1,0 +1,72 @@
+{
+  "id": "disabled-account-in-use",
+  "title": "Something is still using a disabled account",
+  "escalate": false,
+  "priority": 6,
+  "require": {
+    "any": [
+      {
+        "all": [
+          {
+            "signal": "ad_failures",
+            "op": ">=",
+            "value": 3
+          },
+          {
+            "signal": "disabled_share",
+            "op": ">=",
+            "value": 0.6
+          }
+        ]
+      },
+      {
+        "all": [
+          {
+            "signal": "entra_failures",
+            "op": ">=",
+            "value": 3
+          },
+          {
+            "signal": "entra_disabled_share",
+            "op": ">=",
+            "value": 0.6
+          }
+        ]
+      }
+    ]
+  },
+  "support": [
+    {
+      "label": "retries arrive at a regular interval",
+      "cond": {
+        "signal": "cadence_regular",
+        "op": "==",
+        "value": true
+      },
+      "weight": 1
+    },
+    {
+      "label": "one host carries at least 80% of failures",
+      "cond": {
+        "signal": "top_source_share",
+        "op": ">=",
+        "value": 0.8
+      },
+      "weight": 1
+    },
+    {
+      "label": "no wrong-password failures",
+      "cond": {
+        "signal": "wrong_password_share",
+        "op": "==",
+        "value": 0.0
+      },
+      "weight": 1
+    }
+  ],
+  "next_steps": [
+    "Confirm with the identity team whether {account} was disabled on purpose, for example a leaver, a retirement or a security hold. Do not ask for it to be re-enabled until you know why.",
+    "If it was retired on purpose, remove {account} from whatever is still using it on {top_host}.",
+    "If it should be active, raise a request with the identity team through the standard path."
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "id": "lockout-aftermath",
+  "title": "Account was already locked or revoked",
+  "escalate": false,
+  "priority": 4,
+  "require": {
+    "all": [
+      {
+        "signal": "ad_failures",
+        "op": ">=",
+        "value": 3
+      },
+      {
+        "signal": "locked_or_revoked_share",
+        "op": ">=",
+        "value": 0.8
+      }
+    ]
+  },
+  "support": [
+    {
+      "label": "no lockout event inside the window",
+      "cond": {
+        "signal": "lockout_count",
+        "op": "==",
+        "value": 0
+      },
+      "weight": 2
+    },
+    {
+      "label": "one host carries at least 80% of failures",
+      "cond": {
+        "signal": "top_source_share",
+        "op": ">=",
+        "value": 0.8
+      },
+      "weight": 1
+    },
+    {
+      "label": "retries arrive at a regular interval",
+      "cond": {
+        "signal": "cadence_regular",
+        "op": "==",
+        "value": true
+      },
+      "weight": 1
+    }
+  ],
+  "next_steps": [
+    "Run the investigation again with a longer window so it includes the failures that caused the lockout.",
+    "Do not request an unlock yet. Whatever locked {account} is probably still running on {top_host} and will lock it again.",
+    "If the account is not locked and these errors continue, open a ticket with the identity team and quote this reference, because the Kerberos code seen can also mean disabled or expired."
+  ]
+}

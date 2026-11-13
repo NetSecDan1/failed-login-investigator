@@ -1,0 +1,46 @@
+{
+  "id": "conditional-access-block",
+  "title": "Sign-in blocked by access policy",
+  "escalate": false,
+  "priority": 6,
+  "require": {
+    "all": [
+      {
+        "signal": "entra_failures",
+        "op": ">=",
+        "value": 3
+      },
+      {
+        "signal": "entra_ca_block_share",
+        "op": ">=",
+        "value": 0.6
+      }
+    ]
+  },
+  "support": [
+    {
+      "label": "no bad-password failures in cloud sign-ins",
+      "cond": {
+        "signal": "entra_bad_password_share",
+        "op": "==",
+        "value": 0.0
+      },
+      "weight": 2
+    },
+    {
+      "label": "three or fewer source addresses",
+      "cond": {
+        "signal": "entra_distinct_ips",
+        "op": "<=",
+        "value": 3
+      },
+      "weight": 1
+    }
+  ],
+  "next_steps": [
+    "Do not reset the password for {account}. A wrong password is not what stopped these sign-ins.",
+    "Check that you are signing in to {top_app} the approved way: a managed device, the approved app, and from an expected location.",
+    "If {account} is a service or automation account, raise a request with the identity team to review how it should authenticate. Do not look for a workaround.",
+    "If the sign-ins were not you or your system, contact the CSOC."
+  ]
+}

@@ -58,11 +58,12 @@ Best when you want to see every resource before it is created.
 3. Upload code and data. The console cannot do this from the template alone, so finish with:
    ```bash
    python tools/make_data.py
-   aws s3 sync data/ s3://<Bucket output>/ --delete
+   aws s3 sync data/ s3://<Bucket output>/ --delete --exclude "skills/*"
+   aws s3 sync skills/ s3://<Bucket output>/skills/ --delete
    (cd src && zip -qr ../fn.zip .)
    aws lambda update-function-code --function-name fli-proto-fn --zip-file fileb://fn.zip
    ```
-   Or zip `src/` and upload it on the Lambda console Code tab, and upload the `data/` folders in the S3 console.
+   Or zip `src/` and upload it on the Lambda console Code tab, and upload the `data/` folders and `skills/` in the S3 console.
 
 ## Option D: GitHub Actions with OIDC (no stored keys)
 
@@ -103,13 +104,15 @@ audit logs must land, and how the function reaches Splunk, Databricks and IIQ.
 | Case | Expect |
 |------|--------|
 | `owned_stale` | `status=ok`, `class=stale-credential`, `esc=False` |
-| `owned_spray_inj` | `status=ok`, `class=possible-spray-escalate`, `esc=True`, or facts only if the guardrail intervenes |
+| `owned_spray_inj` | `status=ok`, `class=suspicious-source-escalate`, `esc=True`, or facts only if the guardrail intervenes |
 | `owned_no_data` | `status=ok`, `class=insufficient-evidence` |
 | `not_owned` | `status=denied`, `reason=out_of_scope` |
 | `tier0_owned` | `status=denied`, `reason=out_of_scope` |
 | `unknown_caller` | `status=denied`, `reason=scope_empty` |
 
 Without model access the first three show `notes=['summary_withheld:model_error...']` and the denials still pass.
+
+For the full skill evaluation, run `python tools/run_evals.py` (15 cases, one model call each).
 
 Audit lines: `aws logs tail /aws/lambda/fli-proto-fn --since 10m | grep AUDIT`
 

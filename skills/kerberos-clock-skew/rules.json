@@ -1,0 +1,45 @@
+{
+  "id": "kerberos-clock-skew",
+  "title": "Clock on the source system is wrong",
+  "escalate": false,
+  "priority": 7,
+  "require": {
+    "all": [
+      {
+        "signal": "ad_failures",
+        "op": ">=",
+        "value": 3
+      },
+      {
+        "signal": "clock_skew_share",
+        "op": ">=",
+        "value": 0.5
+      }
+    ]
+  },
+  "support": [
+    {
+      "label": "one host carries at least 80% of failures",
+      "cond": {
+        "signal": "top_source_share",
+        "op": ">=",
+        "value": 0.8
+      },
+      "weight": 2
+    },
+    {
+      "label": "no wrong-password failures",
+      "cond": {
+        "signal": "wrong_password_share",
+        "op": "==",
+        "value": 0.0
+      },
+      "weight": 1
+    }
+  ],
+  "next_steps": [
+    "Ask the team that runs {top_host} to check its clock and time synchronisation. Kerberos rejects logons when the clock is more than a few minutes off.",
+    "No password change is needed for {account}. Do not reset it.",
+    "If more than one host is affected, tell the identity team, because the shared time source may be the problem."
+  ]
+}

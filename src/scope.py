@@ -17,23 +17,27 @@ def caller_id(claims):
     return cid
 
 
-def resolve_scope(caller, store):
-    """Return frozenset of account names the caller owns. Any error or empty result denies."""
+def resolve_scope_meta(caller, store):
+    """Return (frozenset of owned account names, {name: account type}). Any error or empty result denies."""
     try:
         export = json.loads(store.get("ownership/ownership.json"))
         owned = export["owners"].get(caller, [])
         deny = {d.lower() for d in export.get("deny_list", [])}
     except Exception:
         raise Denied("ownership_unavailable", "Ownership source unavailable. Try again later.")
-    names = set()
+    meta = {}
     for a in owned:
         name = str(a.get("account", "")).lower()
         if a.get("tier") == 0 or name in deny or not ACCOUNT_RE.fullmatch(name):
             continue
-        names.add(name)
-    if not names:
+        meta[name] = a.get("type")
+    if not meta:
         raise Denied("scope_empty", "No owned accounts found for you.")
-    return frozenset(names)
+    return frozenset(meta), meta
+
+
+def resolve_scope(caller, store):
+    return resolve_scope_meta(caller, store)[0]
 
 
 def check_account(account, scope_set):

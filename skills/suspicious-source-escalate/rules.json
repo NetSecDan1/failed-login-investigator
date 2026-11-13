@@ -1,0 +1,156 @@
+{
+  "id": "suspicious-source-escalate",
+  "title": "Failures from many or external sources",
+  "escalate": true,
+  "priority": 9,
+  "require": {
+    "all": [
+      {
+        "any": [
+          {
+            "all": [
+              {
+                "signal": "ad_failures",
+                "op": ">=",
+                "value": 10
+              },
+              {
+                "signal": "external_ip_count",
+                "op": ">=",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "signal": "ad_failures",
+                "op": ">=",
+                "value": 10
+              },
+              {
+                "signal": "distinct_source_hosts",
+                "op": ">=",
+                "value": 6
+              },
+              {
+                "signal": "pw_change_in_window",
+                "op": "==",
+                "value": false
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "signal": "entra_failures",
+                "op": ">=",
+                "value": 10
+              },
+              {
+                "signal": "entra_distinct_ips",
+                "op": ">=",
+                "value": 8
+              },
+              {
+                "signal": "entra_bad_password_share",
+                "op": ">=",
+                "value": 0.8
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "any": [
+          {
+            "signal": "wrong_password_share",
+            "op": ">=",
+            "value": 0.5
+          },
+          {
+            "signal": "unknown_user_share",
+            "op": ">=",
+            "value": 0.2
+          },
+          {
+            "signal": "entra_bad_password_share",
+            "op": ">=",
+            "value": 0.8
+          }
+        ]
+      }
+    ]
+  },
+  "mandatory_when": {
+    "all": [
+      {
+        "signal": "ad_failures",
+        "op": ">=",
+        "value": 10
+      },
+      {
+        "signal": "external_ip_count",
+        "op": ">=",
+        "value": 1
+      },
+      {
+        "signal": "wrong_password_share",
+        "op": ">=",
+        "value": 0.5
+      }
+    ]
+  },
+  "support": [
+    {
+      "label": "failures packed into an hour or less",
+      "cond": {
+        "signal": "span_minutes",
+        "op": "<=",
+        "value": 60
+      },
+      "weight": 2
+    },
+    {
+      "label": "ten or more distinct source hosts",
+      "cond": {
+        "signal": "distinct_source_hosts",
+        "op": ">=",
+        "value": 10
+      },
+      "weight": 2
+    },
+    {
+      "label": "no regular retry rhythm",
+      "cond": {
+        "signal": "cadence_regular",
+        "op": "==",
+        "value": false
+      },
+      "weight": 1
+    },
+    {
+      "label": "mostly NTLM",
+      "cond": {
+        "signal": "ntlm_share",
+        "op": ">=",
+        "value": 0.8
+      },
+      "weight": 1
+    },
+    {
+      "label": "cloud sign-in failures from several addresses",
+      "cond": {
+        "signal": "entra_distinct_ips",
+        "op": ">=",
+        "value": 3
+      },
+      "weight": 1
+    }
+  ],
+  "next_steps": [
+    "Contact the CSOC now and quote the reference for this investigation.",
+    "Do not change the password for {account} until the CSOC advises.",
+    "Do not try to investigate or block the source systems yourself."
+  ]
+}

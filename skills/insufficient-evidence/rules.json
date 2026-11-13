@@ -1,0 +1,14 @@
+{
+  "id": "insufficient-evidence",
+  "title": "Not enough evidence to explain",
+  "escalate": false,
+  "priority": -1,
+  "require": {
+    "always": true
+  },
+  "support": [],
+  "next_steps": [
+    "Run the investigation again with a longer time window.",
+    "If the problem continues, open a ticket with the identity team and quote the reference for this investigation."
+  ]
+}

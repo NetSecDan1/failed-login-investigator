@@ -1,0 +1,89 @@
+{
+  "id": "stale-credential",
+  "title": "Old password still stored somewhere",
+  "escalate": false,
+  "priority": 5,
+  "require": {
+    "all": [
+      {
+        "signal": "ad_failures",
+        "op": ">=",
+        "value": 5
+      },
+      {
+        "signal": "pw_change_in_window",
+        "op": "==",
+        "value": true
+      },
+      {
+        "signal": "minutes_pw_change_to_first_failure",
+        "op": "<=",
+        "value": 120
+      },
+      {
+        "signal": "wrong_password_share",
+        "op": ">=",
+        "value": 0.7
+      },
+      {
+        "signal": "external_ip_count",
+        "op": "==",
+        "value": 0
+      }
+    ]
+  },
+  "support": [
+    {
+      "label": "one host carries at least 80% of failures",
+      "cond": {
+        "signal": "top_source_share",
+        "op": ">=",
+        "value": 0.8
+      },
+      "weight": 2
+    },
+    {
+      "label": "retries arrive at a regular interval",
+      "cond": {
+        "signal": "cadence_regular",
+        "op": "==",
+        "value": true
+      },
+      "weight": 2
+    },
+    {
+      "label": "no failures before the password change",
+      "cond": {
+        "signal": "failures_before_pw_change",
+        "op": "==",
+        "value": 0
+      },
+      "weight": 2
+    },
+    {
+      "label": "three or fewer source hosts",
+      "cond": {
+        "signal": "distinct_source_hosts",
+        "op": "<=",
+        "value": 3
+      },
+      "weight": 1
+    },
+    {
+      "label": "at least one lockout recorded",
+      "cond": {
+        "signal": "lockout_count",
+        "op": ">=",
+        "value": 1
+      },
+      "weight": 1
+    }
+  ],
+  "next_steps": [
+    "Update the stored password for {account} on {top_host}. Check Windows services, scheduled tasks, application or connection-string config, mapped drives and Credential Manager.",
+    "If {account} is used on other systems, update the stored password there too. The facts list every source host seen.",
+    "Sign out any old remote desktop sessions for {account}, which keep retrying the old password.",
+    "Once the stored password is fixed, request an unlock through the standard service desk path if the account is still locked.",
+    "If nobody recognises {top_host}, stop and contact the CSOC before changing anything."
+  ]
+}

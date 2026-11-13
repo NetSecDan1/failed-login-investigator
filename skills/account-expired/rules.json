@@ -1,0 +1,35 @@
+{
+  "id": "account-expired",
+  "title": "Account has passed its end date",
+  "escalate": false,
+  "priority": 6,
+  "require": {
+    "all": [
+      {
+        "signal": "ad_failures",
+        "op": ">=",
+        "value": 3
+      },
+      {
+        "signal": "account_expired_share",
+        "op": ">=",
+        "value": 0.6
+      }
+    ]
+  },
+  "support": [
+    {
+      "label": "no wrong-password failures",
+      "cond": {
+        "signal": "wrong_password_share",
+        "op": "==",
+        "value": 0.0
+      },
+      "weight": 1
+    }
+  ],
+  "next_steps": [
+    "Ask the account sponsor or your manager to request an extension of the end date for {account} through the standard access request path.",
+    "If {account} is no longer needed, remove it from whatever is still using it on {top_host}."
+  ]
+}

@@ -37,4 +37,46 @@ W("ownership/ownership.json", {"_note": "SYNTHETIC stand-in for the IIQ ownershi
                        {"account": "svc-breakglass", "application": "AD", "tier": 1}],
              "E2002": [{"account": "svc-payroll", "application": "AD", "tier": 1}], "E3003": []},
   "deny_list": ["svc-breakglass"]})
+
+# ---- evaluation cases: one synthetic account per skill, all owned by E5000 ----
+def ad(code, event, host, ip, n, start_h, gap_s, logon_type=None, jitter=0):
+    out, t = [], base.replace(hour=start_h)
+    for i in range(n):
+        r = {"time": Z(t + timedelta(seconds=i * gap_s + (random.randint(0, jitter) if jitter else 0))), "event_code": event,
+             "failure_code": code, "src_host": host, "src_ip": ip, "dc_host": "DC01"}
+        if logon_type:
+            r["logon_type"] = logon_type
+        out.append(r)
+    return out
+
+def entra(code, client, app, ips, n, start_h, gap_s):
+    t = base.replace(hour=start_h)
+    return [{"time": Z(t + timedelta(seconds=i * gap_s)), "error_code": code, "client_app": client, "app": app, "src_ip": ips[i % len(ips)]} for i in range(n)]
+
+def case(name, failed=(), events=(), en=()):
+    W("evidence/%s.json" % name, {"failed_logins": list(failed), "account_events": list(events), "entra_failures": list(en)})
+
+case("ev-disabled", ad("0xC0000072", 4625, "APP-LEGACY02", "10.40.1.12", 30, 6, 600, 5))
+case("ev-pwexpired", ad("0xC0000071", 4625, "APP-RPT11", "10.40.2.20", 12, 7, 900, 5) + ad("0x17", 4771, "APP-RPT11", "10.40.2.20", 12, 7, 900))
+case("ev-acctexpired", ad("0xC0000193", 4625, "WKS-CTR0457", "10.50.7.31", 9, 8, 1200, 2, jitter=400))
+case("ev-skew", ad("0x25", 4771, "VM-BUILD19", "10.60.3.5", 40, 4, 300))
+case("ev-restrict", ad("0xC0000070", 4625, "WKS-FIN0220", "10.50.9.77", 8, 9, 1500, 2, jitter=600))
+case("ev-aftermath", ad("0xC0000234", 4625, "APP-SYNC04", "10.40.5.9", 25, 3, 600, 3) + ad("0x12", 4771, "APP-SYNC04", "10.40.5.9", 25, 3, 600))
+case("ev-nochange", ad("0xC000006A", 4625, "APP-ETL03", "10.40.8.14", 60, 0, 600, 4), events=[{"time": Z(base.replace(hour=2, minute=11)), "event_code": 4740, "caller_host": "APP-ETL03"}])
+case("ev-cablock", en=entra("53003", "Browser", "Finance Portal", ["198.51.100.40"], 14, 10, 420))
+case("ev-legacy", events=[{"time": Z(base.replace(hour=8, minute=30)), "event_code": 4723, "actor": "self"}],
+     en=entra("50126", "Exchange ActiveSync", "Office 365 Exchange Online", ["198.51.100.61", "198.51.100.62"], 36, 9, 900))
+case("ev-mfa", en=entra("50074", "Mobile Apps and Desktop clients", "Microsoft Teams", ["198.51.100.90"], 6, 11, 1800) + entra("50076", "Browser", "Microsoft Teams", ["198.51.100.90"], 4, 12, 1800))
+case("ev-cloudspray", en=entra("50126", "Other clients", "Office 365 Exchange Online", ["203.0.113.%d" % i for i in range(1, 25)], 120, 13, 20))
+case("ev-fleet", [r for h in range(8) for r in ad("0xC000006A", 4625, "APP-WEB%02d" % h, "10.70.1.%d" % (10 + h), 12, 1, 3600, 3)])
+
+own = json.load(open(os.path.join(root, "ownership/ownership.json")))
+for acct in own["owners"]["E1001"]:
+    acct["type"] = "privileged" if acct["tier"] == 0 else "service"
+own["owners"]["E2002"][0]["type"] = "service"
+own["owners"]["E5000"] = [{"account": a, "application": app, "tier": 2, "type": t} for a, app, t in [
+    ("ev-disabled", "AD", "service"), ("ev-pwexpired", "AD", "service"), ("ev-acctexpired", "AD", "person"), ("ev-skew", "AD", "service"),
+    ("ev-restrict", "AD", "person"), ("ev-aftermath", "AD", "service"), ("ev-nochange", "AD", "service"), ("ev-cablock", "Entra", "person"),
+    ("ev-legacy", "Entra", "person"), ("ev-mfa", "Entra", "person"), ("ev-cloudspray", "Entra", "person"), ("ev-fleet", "AD", "service")]]
+W("ownership/ownership.json", own)
 print("synthetic data written")

@@ -1,0 +1,55 @@
+{
+  "id": "legacy-auth-client",
+  "title": "Mail client or script sending a wrong password",
+  "escalate": false,
+  "priority": 5,
+  "require": {
+    "all": [
+      {
+        "signal": "entra_failures",
+        "op": ">=",
+        "value": 5
+      },
+      {
+        "signal": "entra_legacy_client_share",
+        "op": ">=",
+        "value": 0.6
+      },
+      {
+        "signal": "entra_bad_password_share",
+        "op": ">=",
+        "value": 0.6
+      }
+    ]
+  },
+  "exclude": {
+    "signal": "entra_distinct_ips",
+    "op": ">=",
+    "value": 8
+  },
+  "support": [
+    {
+      "label": "three or fewer source addresses",
+      "cond": {
+        "signal": "entra_distinct_ips",
+        "op": "<=",
+        "value": 3
+      },
+      "weight": 2
+    },
+    {
+      "label": "password changed in the window",
+      "cond": {
+        "signal": "pw_change_in_window",
+        "op": "==",
+        "value": true
+      },
+      "weight": 2
+    }
+  ],
+  "next_steps": [
+    "Find the device or script that signs in as {account} with {top_client_app} and update or remove its saved password. Phones and tablets with a built-in mail app are the usual cause.",
+    "Where possible, move that device or script to a modern sign-in method instead of re-entering the password.",
+    "If you do not recognise the client or the source addresses in the facts, contact the CSOC."
+  ]
+}

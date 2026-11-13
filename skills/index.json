@@ -1,0 +1,83 @@
+{
+ "version": "c130d0baca9e",
+ "skills": [
+  {
+   "id": "account-expired",
+   "title": "Account has passed its end date",
+   "description": "Use when most failures carry the account-expired code. The account itself has reached its configured end date, which is different from an expired password, and needs an extension request or retirement.",
+   "escalate": false
+  },
+  {
+   "id": "conditional-access-block",
+   "title": "Sign-in blocked by access policy",
+   "description": "Use when most Entra ID sign-in failures carry a Conditional Access block code. The sign-in was stopped by access policy, such as device, location, client app or risk requirements, and not by a wrong password.",
+   "escalate": false
+  },
+  {
+   "id": "disabled-account-in-use",
+   "title": "Something is still using a disabled account",
+   "description": "Use when most failures carry the account-disabled code in Active Directory or Entra ID. The password is not the problem: the account is disabled and a system or person is still trying to use it.",
+   "escalate": false
+  },
+  {
+   "id": "entra-mfa-interrupt",
+   "title": "Sign-ins stopped at the MFA step",
+   "description": "Use when most Entra ID sign-in entries are multi-factor or additional-verification interrupts rather than wrong-password failures. The password was accepted and the sign-in was not completed at the next step.",
+   "escalate": false
+  },
+  {
+   "id": "expired-password",
+   "title": "Password has expired",
+   "description": "Use when most failures carry the password-expired or must-change-password code in Active Directory or Entra ID. The password presented may be correct but is past its expiry and has to be changed.",
+   "escalate": false
+  },
+  {
+   "id": "insufficient-evidence",
+   "title": "Not enough evidence to explain",
+   "description": "Use when there are no failures in the window, a log source the explanation would depend on is missing, signals conflict, or no other skill clearly fits. States what was checked and what is missing, and never guesses a cause.",
+   "escalate": false
+  },
+  {
+   "id": "kerberos-clock-skew",
+   "title": "Clock on the source system is wrong",
+   "description": "Use when Kerberos failures carry the clock-skew code. The password is fine. The source system's clock differs too much from the domain's, so Kerberos rejects the request.",
+   "escalate": false
+  },
+  {
+   "id": "legacy-auth-client",
+   "title": "Mail client or script sending a wrong password",
+   "description": "Use when Entra ID sign-in failures are bad-password errors coming from legacy clients such as Exchange ActiveSync, IMAP, POP, SMTP or other basic-authentication clients. Usually a phone, tablet or script holding an old password.",
+   "escalate": false
+  },
+  {
+   "id": "lockout-aftermath",
+   "title": "Account was already locked or revoked",
+   "description": "Use when nearly all failures in the window carry the account-locked code or the ambiguous Kerberos revoked code. The window shows attempts bouncing off an account that was already locked, not the failures that caused the lockout.",
+   "escalate": false
+  },
+  {
+   "id": "logon-restriction",
+   "title": "Account is not allowed to log on from there or then",
+   "description": "Use when most failures carry the workstation-restriction or logon-hours code. The password is correct but the account is restricted from logging on at that host or at that time.",
+   "escalate": false
+  },
+  {
+   "id": "stale-credential",
+   "title": "Old password still stored somewhere",
+   "description": "Use when failed logins for an account begin shortly after its password was changed or reset, and most failures are wrong-password errors from internal systems. Explains that something is still presenting the old password, and on which host.",
+   "escalate": false
+  },
+  {
+   "id": "suspicious-source-escalate",
+   "title": "Failures from many or external sources",
+   "description": "Use when wrong-password or unknown-user failures arrive from external addresses, from many different sources in a short burst, or from many internet addresses against cloud sign-in. The pattern does not look like one misconfigured system and must go to the security operations team.",
+   "escalate": true
+  },
+  {
+   "id": "wrong-password-no-change-in-window",
+   "title": "Wrong password retries with no recent password change",
+   "description": "Use when an account shows wrong-password failures from internal systems and no password change or reset appears in the time window. Covers a stored password that went stale before the window began, and a person or script repeatedly presenting a wrong password.",
+   "escalate": false
+  }
+ ]
+}

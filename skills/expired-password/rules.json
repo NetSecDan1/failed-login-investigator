@@ -1,0 +1,63 @@
+{
+  "id": "expired-password",
+  "title": "Password has expired",
+  "escalate": false,
+  "priority": 6,
+  "require": {
+    "any": [
+      {
+        "all": [
+          {
+            "signal": "ad_failures",
+            "op": ">=",
+            "value": 3
+          },
+          {
+            "signal": "password_expired_share",
+            "op": ">=",
+            "value": 0.6
+          }
+        ]
+      },
+      {
+        "all": [
+          {
+            "signal": "entra_failures",
+            "op": ">=",
+            "value": 3
+          },
+          {
+            "signal": "entra_expired_share",
+            "op": ">=",
+            "value": 0.6
+          }
+        ]
+      }
+    ]
+  },
+  "support": [
+    {
+      "label": "retries arrive at a regular interval",
+      "cond": {
+        "signal": "cadence_regular",
+        "op": "==",
+        "value": true
+      },
+      "weight": 1
+    },
+    {
+      "label": "mostly service or batch logons",
+      "cond": {
+        "signal": "service_or_batch_share",
+        "op": ">=",
+        "value": 0.5
+      },
+      "weight": 1
+    }
+  ],
+  "next_steps": [
+    "Change the password for {account} through the standard password change path.",
+    "For a service account, follow the service account rotation procedure so every system that uses it is updated together.",
+    "After the change, update the stored password on {top_host} and on any other source host listed in the facts."
+  ]
+}

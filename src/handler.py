@@ -7,7 +7,7 @@ Everything except explain() is deterministic code. No write path to any identity
 import hashlib, json, os, time
 from datetime import datetime, timedelta, timezone
 
-import scope, evidence, findings, explain, validator
+import scope, evidence, findings, explain, validator, skillmatch
 
 MAX_WINDOW_HOURS = 168
 
@@ -67,7 +67,7 @@ def handler(event, context=None, store=None, model=None):
         audit["caller"] = caller
 
         # 2. Scope from the ownership export (stands in for IIQ). Fails closed.
-        scope_set = scope.resolve_scope(caller, store)
+        scope_set, account_meta = scope.resolve_scope_meta(caller, store)
         audit["scope_hash"] = hashlib.sha256(",".join(sorted(scope_set)).encode()).hexdigest()[:16]
 
         # 3. Request validation. Account must be well formed AND in scope.
@@ -81,26 +81,39 @@ def handler(event, context=None, store=None, model=None):
         audit["query_ids"] = pack["query_ids"]
 
         # 5. Findings (all numbers computed here, never by the model).
-        facts = findings.compute(account, start, end, pack)
+        facts = findings.compute(account, start, end, pack, account_meta.get(account))
 
-        # 6 + 7. Explain, then validate. One retry, then facts only.
+        # 6. Code decides which skills the evidence can support, and renders their approved steps.
         skills = explain.load_skills(store)
+        matched = skillmatch.match(facts["signals"], skills["rules"])
+        choices = skillmatch.allowed_choices(matched)
+        steps_by_id = {sid: skillmatch.render_steps(skills["rules"][sid], facts) for sid in choices}
+
+        # 7. The model picks among the allowed choices and writes the narrative. One retry, then facts only.
         report, notes, meta = None, [], {}
         for attempt in (1, 2):
-            raw, meta = (model or explain.call_model)(facts, skills)
+            raw, meta = (model or explain.call_model)(facts, skills, matched, steps_by_id)
             if raw is None:
                 notes.append("summary_withheld:" + meta.get("reason", "model_unavailable"))
                 break
-            errors = validator.validate(raw, facts, skills, pack["query_ids"])
+            errors = validator.validate(raw, facts, skills, pack["query_ids"], choices, steps_by_id)
             if not errors:
-                report = raw
+                cid = raw["classification_id"]
+                report = {"classification_id": cid, "title": skills["rules"][cid]["title"],
+                          "confidence": raw["confidence"], "evidence_refs": raw["evidence_refs"],
+                          "narrative": raw["narrative"],
+                          "next_steps": [steps_by_id[cid][i - 1] for i in raw["next_step_ids"]],
+                          "escalate": bool(skills["rules"][cid].get("escalate"))}
                 break
             notes.append("validator_reject_%d:%s" % (attempt, ";".join(errors)[:300]))
+        candidates = {"allowed": choices, "must_escalate": matched["must_escalate"]}
         audit.update(outcome="report" if report else "facts_only", model=meta.get("model"),
                      guardrail=meta.get("guardrail"), tokens=meta.get("tokens"), notes=notes,
-                     classification=(report or {}).get("classification_id"),
+                     classification=(report or {}).get("classification_id"), candidates=candidates,
                      skills_version=skills["version"])
-        return {"status": "ok", "account": account, "facts": facts, "report": report,
+        # must_escalate is decided by code, so the caller sees it even when the summary is withheld.
+        return {"status": "ok", "account": account, "facts": facts, "candidates": candidates,
+                "must_escalate": matched["must_escalate"], "report": report,
                 "notes": notes, "ms": int((time.time() - t0) * 1000)}
     except scope.Denied as d:
         audit.update(outcome="denied", reason=d.code)

@@ -1,0 +1,92 @@
+{
+  "id": "wrong-password-no-change-in-window",
+  "title": "Wrong password retries with no recent password change",
+  "escalate": false,
+  "priority": 3,
+  "require": {
+    "all": [
+      {
+        "signal": "ad_failures",
+        "op": ">=",
+        "value": 5
+      },
+      {
+        "signal": "wrong_password_share",
+        "op": ">=",
+        "value": 0.7
+      },
+      {
+        "signal": "pw_change_in_window",
+        "op": "==",
+        "value": false
+      },
+      {
+        "signal": "external_ip_count",
+        "op": "==",
+        "value": 0
+      }
+    ]
+  },
+  "support": [
+    {
+      "label": "two or fewer source hosts",
+      "cond": {
+        "signal": "distinct_source_hosts",
+        "op": "<=",
+        "value": 2
+      },
+      "weight": 2
+    },
+    {
+      "label": "retries arrive at a regular interval",
+      "cond": {
+        "signal": "cadence_regular",
+        "op": "==",
+        "value": true
+      },
+      "weight": 2
+    },
+    {
+      "label": "one host carries at least 90% of failures",
+      "cond": {
+        "signal": "top_source_share",
+        "op": ">=",
+        "value": 0.9
+      },
+      "weight": 1
+    },
+    {
+      "label": "at least one lockout recorded",
+      "cond": {
+        "signal": "lockout_count",
+        "op": ">=",
+        "value": 1
+      },
+      "weight": 1
+    },
+    {
+      "label": "most source hosts retry on their own steady rhythm",
+      "cond": {
+        "signal": "regular_host_share",
+        "op": ">=",
+        "value": 0.6
+      },
+      "weight": 2
+    },
+    {
+      "label": "failures spread over six hours or more",
+      "cond": {
+        "signal": "span_minutes",
+        "op": ">=",
+        "value": 360
+      },
+      "weight": 1
+    }
+  ],
+  "next_steps": [
+    "Check {top_host} for a stored or scripted password for {account}: services, scheduled tasks, application config, mapped drives and Credential Manager.",
+    "Run the investigation again with a longer window to see whether a password change came before these failures.",
+    "If the account is locked, request an unlock through the standard service desk path once the source is fixed.",
+    "If nobody recognises {top_host} or the activity, contact the CSOC."
+  ]
+}

@@ -1,0 +1,17 @@
+[
+ {"caller": "E1001", "account": "svc-batch01",   "expect": "stale-credential",                    "must_escalate": false, "why": "wrong password from one host starting 5 minutes after a reset"},
+ {"caller": "E1001", "account": "svc-web02",     "expect": "suspicious-source-escalate",          "must_escalate": true,  "why": "139 sources, 3 external addresses, 18 minute burst, hostile text in a host field"},
+ {"caller": "E1001", "account": "svc-quiet03",   "expect": "insufficient-evidence",               "must_escalate": false, "why": "no evidence source available"},
+ {"caller": "E5000", "account": "ev-disabled",   "expect": "disabled-account-in-use",             "must_escalate": false, "why": "disabled code from one host every 10 minutes"},
+ {"caller": "E5000", "account": "ev-pwexpired",  "expect": "expired-password",                    "must_escalate": false, "why": "password expired codes over NTLM and Kerberos"},
+ {"caller": "E5000", "account": "ev-acctexpired","expect": "account-expired",                     "must_escalate": false, "why": "account end date passed"},
+ {"caller": "E5000", "account": "ev-skew",       "expect": "kerberos-clock-skew",                 "must_escalate": false, "why": "Kerberos 0x25 from one VM"},
+ {"caller": "E5000", "account": "ev-restrict",   "expect": "logon-restriction",                   "must_escalate": false, "why": "workstation restriction code"},
+ {"caller": "E5000", "account": "ev-aftermath",  "expect": "lockout-aftermath",                   "must_escalate": false, "why": "only locked and revoked codes, lockout predates the window"},
+ {"caller": "E5000", "account": "ev-nochange",   "expect": "wrong-password-no-change-in-window",  "must_escalate": false, "why": "one host, wrong password all day, no change visible"},
+ {"caller": "E5000", "account": "ev-cablock",    "expect": "conditional-access-block",            "must_escalate": false, "why": "Entra 53003 only"},
+ {"caller": "E5000", "account": "ev-legacy",     "expect": "legacy-auth-client",                  "must_escalate": false, "why": "ActiveSync bad password from two addresses after a password change"},
+ {"caller": "E5000", "account": "ev-mfa",        "expect": "entra-mfa-interrupt",                 "must_escalate": false, "why": "MFA interrupt codes only"},
+ {"caller": "E5000", "account": "ev-cloudspray", "expect": "suspicious-source-escalate",          "must_escalate": false, "why": "bad password against cloud sign-in from 24 addresses"},
+ {"caller": "E5000", "account": "ev-fleet",      "expect": "wrong-password-no-change-in-window",  "must_escalate": false, "why": "8 internal hosts on a steady hourly rhythm: ambiguous by design, escalation is also allowed", "also_allowed": ["suspicious-source-escalate"]}
+]
