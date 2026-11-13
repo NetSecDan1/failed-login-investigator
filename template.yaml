@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Failed Login Investigator prototype. Read-only. Synthetic data only. Delete the stack to remove everything.
+Parameters:
+  ModelId:
+    Type: String
+    Description: Bedrock inference profile ID or model ID for an Anthropic Claude model
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration: {Status: Enabled}
+      PublicAccessBlockConfiguration: {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+  Guardrail:
+    Type: AWS::Bedrock::Guardrail
+    Properties:
+      Name: !Sub "${AWS::StackName}-guardrail"
+      Description: Input and output guardrail for the Failed Login Investigator prototype
+      BlockedInputMessaging: Request blocked by guardrail.
+      BlockedOutputsMessaging: Response blocked by guardrail.
+      ContentPolicyConfig:
+        FiltersConfig:
+          - {Type: PROMPT_ATTACK, InputStrength: HIGH, OutputStrength: NONE}
+      TopicPolicyConfig:
+        TopicsConfig:
+          - Name: SecurityControlEvasion
+            Type: DENY
+            Definition: Instructions for evading account lockout, bypassing MFA or Conditional Access, avoiding security monitoring, or guessing passwords.
+            Examples:
+              - How many attempts can I make before the account locks?
+              - How do I get around the MFA prompt for this account?
+      SensitiveInformationPolicyConfig:
+        PiiEntitiesConfig:
+          - {Type: AWS_SECRET_KEY, Action: BLOCK}
+          - {Type: AWS_ACCESS_KEY, Action: BLOCK}
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - {Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: "sts:AssumeRole"}
+      Policies:
+        - PolicyName: read-only-investigator
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadDataBucket
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub "${DataBucket.Arn}/*"
+              - Sid: InvokeClaude
+                Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/anthropic.*"
+                  - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*anthropic.*"
+              - Sid: UseGuardrail
+                Effect: Allow
+                Action: bedrock:ApplyGuardrail
+                Resource: !GetAtt Guardrail.GuardrailArn
+              - Sid: WriteOwnLogs
+                Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub "${LogGroup.Arn}:*"
+              - Sid: DenyEverythingElse
+                Effect: Deny
+                NotAction: [kms:Decrypt, s3:GetObject, bedrock:InvokeModel, bedrock:ApplyGuardrail, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: "*"
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-fn"
+      RetentionInDays: 30
+  Function:
+    Type: AWS::Lambda::Function
+    DependsOn: LogGroup
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-fn"
+      Runtime: python3.13
+      Handler: handler.handler
+      Timeout: 90
+      MemorySize: 256
+      Role: !GetAtt FunctionRole.Arn
+      Environment:
+        Variables:
+          DATA_BUCKET: !Ref DataBucket
+          MODEL_ID: !Ref ModelId
+          GUARDRAIL_ID: !GetAtt Guardrail.GuardrailId
+          GUARDRAIL_VERSION: DRAFT
+          EVIDENCE_BACKEND: file
+          # Prototype only. Lets test events supply the caller. Set to "false" once an API Gateway JWT authorizer is in front.
+          ALLOW_TEST_CLAIMS: "true"
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              return {"status": "placeholder", "message": "run deploy.sh to upload code"}
+Outputs:
+  Bucket: {Value: !Ref DataBucket}
+  FunctionName: {Value: !Ref Function}
+  GuardrailId: {Value: !GetAtt Guardrail.GuardrailId}
+  RoleArn: {Value: !GetAtt FunctionRole.Arn}

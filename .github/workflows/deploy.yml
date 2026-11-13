@@ -1,0 +1,32 @@
+# Manual deploy through GitHub OIDC. Does nothing until you create the role described in
+# docs/DEPLOY.md (Option D) and set the repository variable AWS_DEPLOY_ROLE_ARN.
+name: deploy
+on:
+  workflow_dispatch:
+    inputs:
+      model_id:
+        description: Bedrock model or inference profile ID
+        required: true
+        default: us.anthropic.claude-sonnet-5-5
+      region:
+        description: AWS region
+        required: true
+        default: us-east-2
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install pytest && python tools/make_data.py && python -m pytest -q tests
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ inputs.region }}
+      - run: ./deploy.sh "${{ inputs.model_id }}"
+      - run: ./run_tests.sh

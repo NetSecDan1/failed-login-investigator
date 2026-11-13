@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Usage: ./deploy.sh <bedrock-model-or-inference-profile-id>
+set -euo pipefail
+STACK=fli-proto
+MODEL_ID="${1:?pass a Bedrock model or inference profile id}"
+cd "$(dirname "$0")"
+aws cloudformation deploy --stack-name "$STACK" --template-file template.yaml \
+  --capabilities CAPABILITY_IAM --parameter-overrides "ModelId=$MODEL_ID" \
+  --tags project=fli-proto --no-fail-on-empty-changeset
+out() { aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
+BUCKET=$(out Bucket); FN=$(out FunctionName)
+python3 tools/make_data.py
+aws s3 sync data/ "s3://$BUCKET/" --delete --only-show-errors
+rm -f fn.zip; (cd src && zip -qr ../fn.zip . -x '__pycache__/*')
+aws lambda update-function-code --function-name "$FN" --zip-file fileb://fn.zip --query CodeSha256 --output text
+aws lambda wait function-updated --function-name "$FN"
+echo "DEPLOYED stack=$STACK fn=$FN bucket=$BUCKET guardrail=$(out GuardrailId)"

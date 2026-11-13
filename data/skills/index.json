@@ -1,0 +1,9 @@
+{"version": "0.1.0-prototype",
+ "skills": [
+  {"id": "stale-credential", "title": "Old password still stored somewhere", "escalate": false,
+   "trigger": "Failures start soon after a password change, concentrated on one or two internal hosts, wrong-password codes, regular cadence."},
+  {"id": "possible-spray-escalate", "title": "Possible password guessing from many sources", "escalate": true,
+   "trigger": "Many distinct source hosts or any external source IPs, wrong-password codes, short burst, no password change that explains it."},
+  {"id": "insufficient-evidence", "title": "Not enough evidence to explain", "escalate": false,
+   "trigger": "No failures in the window, or a log source is missing, or no other skill fits clearly."}
+ ]}
