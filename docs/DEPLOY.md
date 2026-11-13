@@ -67,28 +67,33 @@ Best when you want to see every resource before it is created.
 
 ## Option D: GitHub Actions with OIDC (no stored keys)
 
-Best once more than one person deploys. `.github/workflows/deploy.yml` is manual (`workflow_dispatch`) and
-does nothing until the role exists.
+Best once more than one person deploys. `.github/workflows/deploy.yml` runs on pushes to `main` and on demand,
+and skips itself until the repository variable `AWS_DEPLOY_ROLE_ARN` is set.
 
-1. In the AWS account, add GitHub as an OIDC provider (`token.actions.githubusercontent.com`, audience `sts.amazonaws.com`).
-2. Create a deploy role whose trust policy is limited to this repo and branch:
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [{
-       "Effect": "Allow",
-       "Principal": {"Federated": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"},
-       "Action": "sts:AssumeRoleWithWebIdentity",
-       "Condition": {
-         "StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"},
-         "StringLike": {"token.actions.githubusercontent.com:sub": "repo:NetSecDan1/failed-login-investigator:ref:refs/heads/main"}
-       }
-     }]
-   }
+**Check first:** some AWS Organizations block IAM OIDC providers with a service control policy. If
+`aws iam list-open-id-connect-providers` returns an explicit deny that names a service control policy, this
+option is not available in that account. Do not work around it. Use another option or ask the organization owner.
+
+1. Create the provider, the deploy role and the function boundary with the template in `infra/`:
+   ```bash
+   aws cloudformation deploy --stack-name fli-github-oidc --template-file infra/github-oidc.yaml \
+     --capabilities CAPABILITY_NAMED_IAM
    ```
-   Give it only what `deploy.sh` needs, scoped to the `fli-proto` stack and its resources.
-3. Set the repository variable `AWS_DEPLOY_ROLE_ARN` to the role ARN.
-4. Actions, deploy, Run workflow.
+   Pass `--parameter-overrides CreateProvider=false` if the account already has the GitHub provider.
+2. What that role can do: manage the one stack `fli-proto` and its resources. It can create or change the
+   function role only when the role carries the `fli-proto-function-boundary` policy, so it cannot mint a role
+   with more than read-only data access, model invoke and its own logs. It is trusted for this repo's `main` branch only.
+3. If the stack already exists without the boundary, attach it once as an administrator, then let the pipeline keep it:
+   ```bash
+   aws iam put-role-permissions-boundary --role-name <function role name> --permissions-boundary <BoundaryArn output>
+   ```
+4. Set repository variables `AWS_DEPLOY_ROLE_ARN` and `AWS_BOUNDARY_ARN` from the stack outputs. Optional:
+   `AWS_REGION`, `BEDROCK_MODEL_ID`.
+5. Push to `main`, or run the workflow from the Actions tab. It runs the tests, deploys, runs the six smoke
+   cases, then the 15 skill evaluation cases.
+
+**Status:** the templates pass lint. This path has not been deployed. The first attempt in the test account
+was stopped by an organization service control policy on OIDC providers.
 
 ## Option E: Your organization's pipeline
 

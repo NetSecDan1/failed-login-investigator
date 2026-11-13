@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: GitHub Actions deploy role for the Failed Login Investigator prototype. No stored keys. Trusted for one repo and one branch.
+Parameters:
+  Repo:
+    Type: String
+    Default: NetSecDan1/failed-login-investigator
+  Branch:
+    Type: String
+    Default: main
+  CreateProvider:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Set false if the account already has the token.actions.githubusercontent.com OIDC provider
+  StackPrefix:
+    Type: String
+    Default: fli-proto
+Conditions:
+  MakeProvider: !Equals [!Ref CreateProvider, "true"]
+Resources:
+  Provider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: MakeProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+  # Ceiling for any role the deploy role creates. A role without this boundary cannot be created or changed.
+  FunctionBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${StackPrefix}-function-boundary"
+      Description: Maximum permissions for the investigator function role. Read-only data access, model invoke, own logs.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - bedrock:InvokeModel
+              - bedrock:ApplyGuardrail
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - kms:Decrypt
+              - secretsmanager:GetSecretValue
+              - ec2:CreateNetworkInterface
+              - ec2:DescribeNetworkInterfaces
+              - ec2:DeleteNetworkInterface
+              - ec2:AssignPrivateIpAddresses
+              - ec2:UnassignPrivateIpAddresses
+            Resource: "*"
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${StackPrefix}-github-deploy"
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub "repo:${Repo}:ref:refs/heads/${Branch}"
+      Policies:
+        - PolicyName: deploy-one-stack
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: Stack
+                Effect: Allow
+                Action: cloudformation:*
+                Resource: !Sub "arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StackPrefix}/*"
+              - Sid: TemplateChecks
+                Effect: Allow
+                Action: [cloudformation:GetTemplateSummary, cloudformation:ValidateTemplate]
+                Resource: "*"
+              - Sid: DataBucket
+                Effect: Allow
+                Action: s3:*
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${StackPrefix}-*"
+                  - !Sub "arn:${AWS::Partition}:s3:::${StackPrefix}-*/*"
+              - Sid: Function
+                Effect: Allow
+                Action: lambda:*
+                Resource: !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${StackPrefix}-*"
+              - Sid: Guardrail
+                Effect: Allow
+                Action: [bedrock:CreateGuardrail, bedrock:UpdateGuardrail, bedrock:DeleteGuardrail, bedrock:GetGuardrail, bedrock:ListGuardrails, bedrock:TagResource, bedrock:UntagResource, bedrock:ListTagsForResource]
+                Resource: "*"
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogGroup, logs:DeleteLogGroup, logs:PutRetentionPolicy, logs:DeleteRetentionPolicy, logs:TagResource, logs:UntagResource, logs:ListTagsForResource, logs:FilterLogEvents, logs:GetLogEvents]
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${StackPrefix}-*"
+              - Sid: LogsDescribe
+                Effect: Allow
+                Action: logs:DescribeLogGroups
+                Resource: "*"
+              - Sid: HttpApi
+                Effect: Allow
+                Action: [apigateway:GET, apigateway:POST, apigateway:PATCH, apigateway:PUT, apigateway:DELETE]
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}::/apis"
+                  - !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}::/apis/*"
+                  - !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}::/tags/*"
+              - Sid: ReadFunctionRole
+                Effect: Allow
+                Action: [iam:GetRole, iam:GetRolePolicy, iam:ListRolePolicies, iam:ListAttachedRolePolicies, iam:TagRole, iam:UntagRole, iam:DeleteRole, iam:DeleteRolePolicy]
+                Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${StackPrefix}-FunctionRole-*"
+              - Sid: WriteFunctionRoleOnlyUnderBoundary
+                Effect: Allow
+                Action: [iam:CreateRole, iam:PutRolePolicy, iam:PutRolePermissionsBoundary, iam:UpdateAssumeRolePolicy]
+                Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${StackPrefix}-FunctionRole-*"
+                Condition:
+                  StringEquals:
+                    iam:PermissionsBoundary: !Ref FunctionBoundary
+              - Sid: PassFunctionRoleToLambdaOnly
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${StackPrefix}-FunctionRole-*"
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: lambda.amazonaws.com
+Outputs:
+  DeployRoleArn: {Value: !GetAtt DeployRole.Arn}
+  BoundaryArn: {Value: !Ref FunctionBoundary}

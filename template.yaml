@@ -44,6 +44,10 @@ Parameters:
   DatabricksViewFailedLogins: {Type: String, Default: ""}
   DatabricksViewAccountEvents: {Type: String, Default: ""}
   DatabricksViewEntraFailures: {Type: String, Default: ""}
+  PermissionsBoundaryArn:
+    Type: String
+    Default: ""
+    Description: Optional. Managed policy ARN set as the permissions boundary on the function role. Required when deploying through the GitHub deploy role.
   VpcSubnetIds:
     Type: CommaDelimitedList
     Default: ""
@@ -54,6 +58,7 @@ Parameters:
 Conditions:
   HasApi: !Not [!Equals [!Ref JwtIssuer, ""]]
   HasSecret: !Not [!Equals [!Ref BackendTokenSecretArn, ""]]
+  HasBoundary: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
   InVpc: !Not [!Equals [!Join ["", !Ref VpcSubnetIds], ""]]
 Resources:
   DataBucket:
@@ -89,6 +94,7 @@ Resources:
   FunctionRole:
     Type: AWS::IAM::Role
     Properties:
+      PermissionsBoundary: !If [HasBoundary, !Ref PermissionsBoundaryArn, !Ref AWS::NoValue]
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:

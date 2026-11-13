@@ -1,32 +1,43 @@
-# Manual deploy through GitHub OIDC. Does nothing until you create the role described in
-# docs/DEPLOY.md (Option D) and set the repository variable AWS_DEPLOY_ROLE_ARN.
+# Deploys the prototype stack through GitHub OIDC. No stored AWS keys.
+# Needs repository variables AWS_DEPLOY_ROLE_ARN and AWS_BOUNDARY_ARN (see docs/DEPLOY.md, Option D).
 name: deploy
 on:
+  push:
+    branches: [main]
+    paths-ignore: ["docs/**", "**.md"]
   workflow_dispatch:
     inputs:
       model_id:
-        description: Bedrock model or inference profile ID
-        required: true
-        default: us.anthropic.claude-sonnet-5-5
-      region:
-        description: AWS region
-        required: true
-        default: us-east-2
+        description: Bedrock model or inference profile ID (blank uses the BEDROCK_MODEL_ID variable)
+        required: false
 permissions:
   id-token: write
   contents: read
+concurrency:
+  group: deploy-fli-proto
+  cancel-in-progress: false
 jobs:
   deploy:
+    if: ${{ vars.AWS_DEPLOY_ROLE_ARN != '' }}
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+      MODEL_ID: ${{ inputs.model_id || vars.BEDROCK_MODEL_ID || 'us.anthropic.claude-sonnet-5-5' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install pytest pyyaml && python -m pytest -q tests
+      - name: Test before deploy
+        run: pip install pytest pyyaml boto3 && python -m pytest -q tests
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ inputs.region }}
-      - run: ./deploy.sh "${{ inputs.model_id }}"
-      - run: ./run_tests.sh
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Deploy
+        run: ./deploy.sh "$MODEL_ID" "PermissionsBoundaryArn=${{ vars.AWS_BOUNDARY_ARN }}"
+      - name: Live smoke tests
+        run: ./run_tests.sh
+      - name: Live skill evaluation
+        continue-on-error: true
+        run: python tools/run_evals.py
