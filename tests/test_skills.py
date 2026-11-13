@@ -35,7 +35,7 @@ def test_skill_file_shape(sid):
     assert 40 <= len(fm["description"]) <= 1024 and fm["description"].startswith("Use when")
     pos = [md.index(h) for h in SECTIONS]            # every section present ...
     assert pos == sorted(pos)                          # ... and in the standard order
-    assert "—" not in md and "–" not in md
+    assert chr(0x2014) not in md and chr(0x2013) not in md
     assert len(md) < 6000, "keep skills short enough to load several at once"
 
 
