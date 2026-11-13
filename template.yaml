@@ -4,6 +4,57 @@ Parameters:
   ModelId:
     Type: String
     Description: Bedrock inference profile ID or model ID for an Anthropic Claude model
+  AllowTestClaims:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Prototype only. "true" lets a direct invoke supply the caller. Set "false" when the API is in front.
+  CallerClaim:
+    Type: String
+    Default: employee_id
+    Description: Token claim that identifies the caller and matches the ownership source key (for example employee_id, oid, preferred_username)
+  JwtIssuer:
+    Type: String
+    Default: ""
+    Description: Optional. OIDC issuer URL. When set, an HTTP API with a JWT authorizer is created.
+  JwtAudience:
+    Type: String
+    Default: ""
+    Description: Required with JwtIssuer. Audience (application ID URI or client ID) the token must carry.
+  ApiRateLimit:
+    Type: Number
+    Default: 2
+    Description: Steady requests per second allowed across the API
+  ApiBurstLimit:
+    Type: Number
+    Default: 5
+  EvidenceBackend:
+    Type: String
+    Default: file
+    AllowedValues: [file, splunk, databricks]
+  BackendTokenSecretArn:
+    Type: String
+    Default: ""
+    Description: Optional. Secrets Manager ARN holding the read-only Splunk or Databricks token as a plain string.
+  SplunkBaseUrl: {Type: String, Default: ""}
+  SplunkIndexWindows: {Type: String, Default: ""}
+  SplunkIndexEntra: {Type: String, Default: ""}
+  DatabricksHost: {Type: String, Default: ""}
+  DatabricksWarehouseId: {Type: String, Default: ""}
+  DatabricksViewFailedLogins: {Type: String, Default: ""}
+  DatabricksViewAccountEvents: {Type: String, Default: ""}
+  DatabricksViewEntraFailures: {Type: String, Default: ""}
+  VpcSubnetIds:
+    Type: CommaDelimitedList
+    Default: ""
+    Description: Optional. Private subnets, needed when the evidence source is only reachable inside your network.
+  VpcSecurityGroupIds:
+    Type: CommaDelimitedList
+    Default: ""
+Conditions:
+  HasApi: !Not [!Equals [!Ref JwtIssuer, ""]]
+  HasSecret: !Not [!Equals [!Ref BackendTokenSecretArn, ""]]
+  InVpc: !Not [!Equals [!Join ["", !Ref VpcSubnetIds], ""]]
 Resources:
   DataBucket:
     Type: AWS::S3::Bucket
@@ -65,9 +116,35 @@ Resources:
                 Effect: Allow
                 Action: [logs:CreateLogStream, logs:PutLogEvents]
                 Resource: !Sub "${LogGroup.Arn}:*"
+              - !If
+                - HasSecret
+                - Sid: ReadBackendToken
+                  Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref BackendTokenSecretArn
+                - !Ref AWS::NoValue
+              - !If
+                - InVpc
+                - Sid: ManageOwnNetworkInterfaces
+                  Effect: Allow
+                  Action: [ec2:CreateNetworkInterface, ec2:DescribeNetworkInterfaces, ec2:DeleteNetworkInterface, ec2:AssignPrivateIpAddresses, ec2:UnassignPrivateIpAddresses]
+                  Resource: "*"
+                - !Ref AWS::NoValue
               - Sid: DenyEverythingElse
                 Effect: Deny
-                NotAction: [kms:Decrypt, s3:GetObject, bedrock:InvokeModel, bedrock:ApplyGuardrail, logs:CreateLogStream, logs:PutLogEvents]
+                NotAction:
+                  - kms:Decrypt
+                  - s3:GetObject
+                  - bedrock:InvokeModel
+                  - bedrock:ApplyGuardrail
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - secretsmanager:GetSecretValue
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:AssignPrivateIpAddresses
+                  - ec2:UnassignPrivateIpAddresses
                 Resource: "*"
   LogGroup:
     Type: AWS::Logs::LogGroup
@@ -92,14 +169,92 @@ Resources:
           MODEL_ID: !Ref ModelId
           GUARDRAIL_ID: !GetAtt Guardrail.GuardrailId
           GUARDRAIL_VERSION: DRAFT
-          EVIDENCE_BACKEND: file
-          # Prototype only. Lets test events supply the caller. Set to "false" once an API Gateway JWT authorizer is in front.
-          ALLOW_TEST_CLAIMS: "true"
+          EVIDENCE_BACKEND: !Ref EvidenceBackend
+          ALLOW_TEST_CLAIMS: !Ref AllowTestClaims
+          CALLER_CLAIM: !Ref CallerClaim
+          SPLUNK_BASE_URL: !Ref SplunkBaseUrl
+          SPLUNK_INDEX_WINDOWS: !Ref SplunkIndexWindows
+          SPLUNK_INDEX_ENTRA: !Ref SplunkIndexEntra
+          SPLUNK_TOKEN_SECRET_ARN: !If [HasSecret, !Ref BackendTokenSecretArn, ""]
+          DATABRICKS_HOST: !Ref DatabricksHost
+          DATABRICKS_WAREHOUSE_ID: !Ref DatabricksWarehouseId
+          DATABRICKS_TOKEN_SECRET_ARN: !If [HasSecret, !Ref BackendTokenSecretArn, ""]
+          DATABRICKS_VIEW_FAILED_LOGINS: !Ref DatabricksViewFailedLogins
+          DATABRICKS_VIEW_ACCOUNT_EVENTS: !Ref DatabricksViewAccountEvents
+          DATABRICKS_VIEW_ENTRA_FAILURES: !Ref DatabricksViewEntraFailures
+      VpcConfig: !If
+        - InVpc
+        - {SubnetIds: !Ref VpcSubnetIds, SecurityGroupIds: !Ref VpcSecurityGroupIds}
+        - !Ref AWS::NoValue
       Code:
         ZipFile: |
           def handler(event, context):
               return {"status": "placeholder", "message": "run deploy.sh to upload code"}
+  Api:
+    Type: AWS::ApiGatewayV2::Api
+    Condition: HasApi
+    Properties:
+      Name: !Sub "${AWS::StackName}-api"
+      ProtocolType: HTTP
+  ApiAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Condition: HasApi
+    Properties:
+      ApiId: !Ref Api
+      Name: jwt
+      AuthorizerType: JWT
+      IdentitySource: ["$request.header.Authorization"]
+      JwtConfiguration:
+        Issuer: !Ref JwtIssuer
+        Audience: [!Ref JwtAudience]
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Condition: HasApi
+    Properties:
+      ApiId: !Ref Api
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt Function.Arn
+      PayloadFormatVersion: "2.0"
+  RouteListAccounts:
+    Type: AWS::ApiGatewayV2::Route
+    Condition: HasApi
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: GET /accounts
+      AuthorizationType: JWT
+      AuthorizerId: !Ref ApiAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+  RouteInvestigate:
+    Type: AWS::ApiGatewayV2::Route
+    Condition: HasApi
+    Properties:
+      ApiId: !Ref Api
+      RouteKey: POST /investigations
+      AuthorizationType: JWT
+      AuthorizerId: !Ref ApiAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Condition: HasApi
+    Properties:
+      ApiId: !Ref Api
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingRateLimit: !Ref ApiRateLimit
+        ThrottlingBurstLimit: !Ref ApiBurstLimit
+  ApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasApi
+    Properties:
+      FunctionName: !Ref Function
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*"
 Outputs:
+  ApiUrl:
+    Condition: HasApi
+    Value: !GetAtt Api.ApiEndpoint
   Bucket: {Value: !Ref DataBucket}
   FunctionName: {Value: !Ref Function}
   GuardrailId: {Value: !GetAtt Guardrail.GuardrailId}

@@ -97,6 +97,38 @@ resources to the approved IaC tool and pipeline, keep the IAM statements as writ
 `run_tests.sh` cases over as pipeline gates. Decide these before porting: approved models and regions, where
 audit logs must land, and how the function reaches Splunk, Databricks and IIQ.
 
+## Turning on the HTTP API
+
+The API is off by default. Passing an issuer creates an HTTP API with a JWT authorizer, two routes
+(`GET /accounts`, `POST /investigations`) and a global throttle. **This path passes template lint and unit tests
+with simulated API events. It has not been deployed or called with a real token.**
+
+```bash
+./deploy.sh <model-id> \
+  JwtIssuer=https://login.microsoftonline.com/<tenant-id>/v2.0 \
+  JwtAudience=<application client ID or ID URI your tokens carry> \
+  CallerClaim=<claim that matches your ownership keys> \
+  AllowTestClaims=false
+```
+
+- **Issuer and audience** must equal the `iss` and `aud` in a real access token. Decode one first and copy the values.
+- **Caller claim:** Entra tokens do not carry an employee number unless you add it as an optional or mapped
+  claim. `oid` and `preferred_username` are present by default. Whatever you choose must be the key used in the ownership source.
+- **`AllowTestClaims=false`** makes the function ignore any caller passed in the request. Leave it `true` only while testing by direct invoke.
+- The endpoint is public by default. Put it behind your network controls before real use.
+
+Call it:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" "$API/accounts"
+curl -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" \
+  -d '{"account":"svc-batch01","window_hours":24}' "$API/investigations"
+```
+
+Status codes: 200 ok, 400 bad input, 401 no verified caller, 403 not yours or nothing owned, 503 ownership source down.
+
+Real evidence sources are covered in [`BACKENDS.md`](BACKENDS.md).
+
 ## Verify
 
 `./run_tests.sh` prints one line per case. Expected once model access works:

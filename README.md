@@ -3,7 +3,7 @@
 A read-only agent on AWS Bedrock that explains why an account keeps failing to log in.
 It only looks at accounts the caller owns, and that rule is enforced by code the model cannot touch.
 
-**Status: prototype. Synthetic data only.** No connection to AD, Entra, Splunk, Databricks or IIQ exists in this repo.
+**Status: prototype, verified on synthetic data only.** Splunk and Databricks clients exist but have never touched a live system. Nothing here connects to AD, Entra or IIQ.
 
 ## How it works
 
@@ -28,14 +28,23 @@ facts table, the escalation flag, and no summary. The design brief is in [`docs/
 
 | Piece | In this repo | Production target |
 |-------|--------------|-------------------|
-| Caller identity | Test claims in the event (`ALLOW_TEST_CLAIMS=true`) | Entra JWT through an API Gateway authorizer |
+| Caller identity | Test claims in the event (`ALLOW_TEST_CLAIMS=true`) | Entra JWT through the optional HTTP API and JWT authorizer in `template.yaml`. Not yet deployed or tested with a real token |
 | Ownership | `ownership/ownership.json` in S3, generated | SailPoint IIQ API or scheduled export |
-| Evidence | `evidence/<account>.json` in S3, generated | Splunk first, Databricks end state, same three functions |
-| Query templates | `queries/` plus `src/querypack.py`, tested but not wired or verified live | Called by the Splunk and Databricks backends |
+| Evidence | `evidence/<account>.json` in S3, generated (`EVIDENCE_BACKEND=file`) | Splunk or Databricks through `src/backends.py`. Built and unit tested against fake responses, not yet run live. See [`docs/BACKENDS.md`](docs/BACKENDS.md) |
 | Skill files | 13 skills in `skills/`, synced to S3. See [`docs/SKILLS.md`](docs/SKILLS.md) | Same, with pull request review |
 | Audit | One `AUDIT` JSON line per request in CloudWatch | Plus immutable S3 copy and forward to the SIEM |
 
 ## Quick start
+
+**On a laptop, no AWS needed:**
+
+```bash
+python tools/investigate.py --caller E1001 --list
+python tools/investigate.py --caller E1001 --account svc-batch01          # facts and allowed skills, no model
+python tools/investigate.py --caller E5000 --account ev-legacy --model us.anthropic.claude-sonnet-4-6   # adds the model, uses your AWS credentials
+```
+
+**Deployed:**
 
 Prerequisite: Anthropic model access in the target account. Bedrock asks first-time accounts to submit
 use case details for Anthropic models. Until that is done the function returns facts only.
@@ -46,7 +55,19 @@ use case details for Anthropic models. Until that is done the function returns f
 ./teardown.sh                                 # removes everything
 ```
 
-Other ways to deploy, including CloudShell, the CloudFormation console and GitHub Actions: [`docs/DEPLOY.md`](docs/DEPLOY.md).
+Other ways to deploy, the HTTP API and its parameters: [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+## Layout
+
+| Path | What |
+|------|------|
+| `src/` | The pipeline. `handler.py` is the entry point |
+| `skills/` | 13 skills, each `SKILL.md` plus `rules.json` |
+| `queries/`, `config/field_map.json` | Fixed query templates and the source field mapping |
+| `evals/cases.json` | One synthetic case per skill |
+| `tools/` | Local CLI, data generator, skill index builder, live eval runner |
+| `tests/` | Offline tests, no network |
+| `docs/` | Deploy guide, skills guide, backends guide, design brief |
 
 ## Tests
 
@@ -77,4 +98,5 @@ the evidence does not support, a model trying to talk down a mandatory escalatio
 - Not 100% safe, and nothing is. What is guaranteed by construction is no write path and no out-of-scope read. Wrong explanations and stale ownership data remain possible.
 - The entity check in the validator is a heuristic (tokens that mix letters and digits). Expect occasional false rejects, which fall back to facts only.
 - The model-facing wording of the skills has not been evaluated against a live model yet. Thresholds in `rules.json` were set against synthetic data.
-- No rate limiting, API, or UI yet.
+- API throttling is global, not per caller. No UI yet.
+- IIQ is not connected. Ownership is still a JSON file.

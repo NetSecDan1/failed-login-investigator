@@ -1,5 +1,5 @@
-SELECT event_time, event_code, account, src_host, src_ip, failure_code, logon_type, dc_host
-FROM   <catalog>.<schema>.v_auth_failures
+SELECT event_time, event_code, failure_code, src_host, src_ip, dc_host, logon_type
+FROM   {view_failed_logins}
 WHERE  account = :account
   AND  event_time >= :start AND event_time < :end
 ORDER  BY event_time

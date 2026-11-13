@@ -10,9 +10,13 @@ class Denied(Exception):
         self.code, self.message = code, message
 
 
-def caller_id(claims):
-    cid = claims.get("employee_id")
-    if not isinstance(cid, str) or not re.fullmatch(r"[A-Za-z0-9]{1,32}", cid):
+CALLER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@-]{0,127}$")
+
+
+def caller_id(claims, claim_name="employee_id"):
+    """The caller is whatever the configured token claim says. Employee number, object ID and UPN all fit."""
+    cid = claims.get(claim_name) if isinstance(claims, dict) else None
+    if not isinstance(cid, str) or not CALLER_RE.fullmatch(cid):
         raise Denied("unauthenticated", "No verified caller identity.")
     return cid
 
@@ -21,7 +25,8 @@ def resolve_scope_meta(caller, store):
     """Return (frozenset of owned account names, {name: account type}). Any error or empty result denies."""
     try:
         export = json.loads(store.get("ownership/ownership.json"))
-        owned = export["owners"].get(caller, [])
+        owners = {str(k).lower(): v for k, v in export["owners"].items()}
+        owned = owners.get(caller.lower(), [])
         deny = {d.lower() for d in export.get("deny_list", [])}
     except Exception:
         raise Denied("ownership_unavailable", "Ownership source unavailable. Try again later.")

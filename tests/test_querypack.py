@@ -4,6 +4,13 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import querypack, scope
 
+@pytest.fixture(autouse=True)
+def settings(monkeypatch):
+    monkeypatch.setenv("SPLUNK_INDEX_WINDOWS", "wineventlog")
+    monkeypatch.setenv("SPLUNK_INDEX_ENTRA", "azure_signin")
+    for k in ("FAILED_LOGINS", "ACCOUNT_EVENTS", "ENTRA_FAILURES"):
+        monkeypatch.setenv("DATABRICKS_VIEW_" + k, "sec.identity.v_" + k.lower())
+
 S = frozenset({"svc-batch01"})
 T1 = datetime(2026, 11, 12, 18, tzinfo=timezone.utc)
 T0 = T1 - timedelta(hours=24)
@@ -11,11 +18,11 @@ T0 = T1 - timedelta(hours=24)
 def test_spl_renders_only_validated_values():
     q = querypack.render("failed_logins.spl", "SVC-Batch01", T0, T1, S)
     assert 'user="svc-batch01"' in q["text"] and 'earliest="2026-11-11T18:00:00"' in q["text"]
-    assert "{" not in q["text"] and q["params"] == {}
+    assert "index=wineventlog" in q["text"] and "{" not in q["text"] and q["params"] == {}
 
 def test_sql_uses_bound_parameters_not_text():
     q = querypack.render("failed_logins.sql", "svc-batch01", T0, T1, S)
-    assert "svc-batch01" not in q["text"] and ":account" in q["text"]
+    assert "svc-batch01" not in q["text"] and ":account" in q["text"] and "sec.identity.v_failed_logins" in q["text"]
     assert q["params"] == {"account": "svc-batch01", "start": "2026-11-11T18:00:00", "end": "2026-11-12T18:00:00"}
 
 @pytest.mark.parametrize("bad", ['svc-batch01" OR user="*', "svc-batch01 | delete", "*", "svc-batch01\n| outputlookup x", "a]b"])
@@ -44,5 +51,16 @@ def test_unknown_template_and_path_tricks_rejected():
 
 def test_every_template_has_a_row_cap():
     for name in querypack.ALLOWED:
-        text = open(os.path.join(querypack.TEMPLATE_DIR, name)).read().lower()
+        text = open(os.path.join(querypack.template_dir(), name)).read().lower()
         assert "head " in text or "limit " in text, name
+
+@pytest.mark.parametrize("bad", ["", "main | delete", "a b", "x\" OR index=*", "*", "idx;drop"])
+def test_operator_settings_must_be_plain_identifiers(monkeypatch, bad):
+    monkeypatch.setenv("SPLUNK_INDEX_WINDOWS", bad)
+    with pytest.raises(ValueError):
+        querypack.render("failed_logins.spl", "svc-batch01", T0, T1, S)
+
+def test_all_six_templates_render():
+    for name in sorted(querypack.ALLOWED):
+        q = querypack.render(name, "svc-batch01", T0, T1, S)
+        assert "{" not in q["text"], name

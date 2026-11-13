@@ -1,14 +1,9 @@
 """Read tools. Fixed shapes only: (account, start, end). No free-text queries.
 
-Backend 'file' reads synthetic evidence from S3. Splunk and Databricks backends plug in
-behind the same three functions later; they are intentionally not implemented here.
+The three functions below are the whole tool surface. Which system answers them is chosen by
+EVIDENCE_BACKEND (file, splunk or databricks) in src/backends.py.
 """
-import json, os
-from datetime import datetime
-
-import scope
-
-ROW_CAP = 5000
+import backends
 
 
 class S3Store:
@@ -20,7 +15,7 @@ class S3Store:
         return self.s3.get_object(Bucket=self.bucket, Key=key)["Body"].read().decode()
 
 
-class DictStore:  # tests
+class DictStore:  # tests and local runs
     def __init__(self, d):
         self.d = d
 
@@ -28,46 +23,27 @@ class DictStore:  # tests
         return self.d[key]
 
 
-def _ts(s):
-    return datetime.fromisoformat(s.replace("Z", "+00:00"))
+def _backend(source):
+    return source if isinstance(source, backends.Backend) else backends.FileBackend(source)
 
 
-def _query(kind, account, start, end, scope_set, store):
-    if account not in scope_set:  # re-check inside every tool
-        raise scope.Denied("out_of_scope", "You can only investigate accounts you own.")
-    backend = os.environ.get("EVIDENCE_BACKEND", "file")
-    if backend != "file":
-        raise NotImplementedError("backend %s not wired in this prototype" % backend)
-    key = "evidence/%s.json" % account
-    qid = "file:%s#%s" % (key, kind)
-    try:
-        rows = json.loads(store.get(key)).get(kind)
-    except Exception:
-        return {"query_id": qid, "rows": [], "truncated": False, "error": "source_unavailable"}
-    if rows is None:
-        return {"query_id": qid, "rows": [], "truncated": False, "error": "source_missing"}
-    rows = [r for r in rows if start <= _ts(r["time"]) < end]
-    rows.sort(key=lambda r: r["time"])
-    return {"query_id": qid, "rows": rows[:ROW_CAP], "truncated": len(rows) > ROW_CAP}
+def get_failed_logins(account, start, end, scope_set, source):
+    return _backend(source).query("failed_logins", account, start, end, scope_set)
 
 
-def get_failed_logins(account, start, end, scope_set, store):
-    return _query("failed_logins", account, start, end, scope_set, store)
+def get_account_events(account, start, end, scope_set, source):
+    return _backend(source).query("account_events", account, start, end, scope_set)
 
 
-def get_account_events(account, start, end, scope_set, store):
-    return _query("account_events", account, start, end, scope_set, store)
+def get_entra_failures(account, start, end, scope_set, source):
+    return _backend(source).query("entra_failures", account, start, end, scope_set)
 
 
-def get_entra_failures(account, start, end, scope_set, store):
-    return _query("entra_failures", account, start, end, scope_set, store)
-
-
-def collect(account, start, end, scope_set, store):
+def collect(account, start, end, scope_set, source):
     pack = {
-        "failed_logins": get_failed_logins(account, start, end, scope_set, store),
-        "account_events": get_account_events(account, start, end, scope_set, store),
-        "entra_failures": get_entra_failures(account, start, end, scope_set, store),
+        "failed_logins": get_failed_logins(account, start, end, scope_set, source),
+        "account_events": get_account_events(account, start, end, scope_set, source),
+        "entra_failures": get_entra_failures(account, start, end, scope_set, source),
     }
     pack["query_ids"] = [pack[k]["query_id"] for k in ("failed_logins", "account_events", "entra_failures")]
     return pack

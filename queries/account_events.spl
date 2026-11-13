@@ -1,4 +1,3 @@
-search index=<win_security> EventCode IN (4740,4723,4724,4767) user="{account}" earliest="{start}" latest="{end}"
-| fields _time EventCode user src_user Caller_Computer_Name dest
+search index={index_windows} EventCode IN (4740,4723,4724,4767) user="{account}" earliest="{start}" latest="{end}"
 | sort 0 _time
 | head 1000

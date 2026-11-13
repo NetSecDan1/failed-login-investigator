@@ -7,7 +7,7 @@ Everything except explain() is deterministic code. No write path to any identity
 import hashlib, json, os, time
 from datetime import datetime, timedelta, timezone
 
-import scope, evidence, findings, explain, validator, skillmatch
+import scope, evidence, backends, findings, explain, validator, skillmatch
 
 MAX_WINDOW_HOURS = 168
 
@@ -55,20 +55,43 @@ def _audit(rec):
     print("AUDIT " + json.dumps(rec, sort_keys=True))
 
 
-def handler(event, context=None, store=None, model=None):
+HTTP_STATUS = {"unauthenticated": 401, "out_of_scope": 403, "scope_empty": 403, "ownership_unavailable": 503}
+
+
+def _respond(event, result):
+    """Direct invokes get the result as is. HTTP API events get a proxy response."""
+    if not isinstance((event.get("requestContext") or {}).get("http"), dict):
+        return result
+    code = 200 if result.get("status") == "ok" else HTTP_STATUS.get(result.get("reason"), 400)
+    return {"statusCode": code, "headers": {"content-type": "application/json", "cache-control": "no-store"},
+            "body": json.dumps(result)}
+
+
+def handler(event, context=None, store=None, model=None, backend=None):
+    return _respond(event, _run(event, context, store, model, backend))
+
+
+def _run(event, context, store, model, backend):
     t0 = time.time()
     store = store or evidence.S3Store(os.environ["DATA_BUCKET"])
-    audit = {"request_id": getattr(context, "aws_request_id", "local"), "outcome": "error"}
+    route = event.get("routeKey") or event.get("action") or "POST /investigations"
+    audit = {"request_id": getattr(context, "aws_request_id", "local"), "outcome": "error", "route": route}
     try:
+        if route not in ("POST /investigations", "GET /accounts", "list_accounts"):
+            raise scope.Denied("bad_route", "Unknown route.")
         # 1. Authenticate. Claims come from the API Gateway JWT authorizer. Claims passed in the
         #    event body are honoured only when ALLOW_TEST_CLAIMS=true (prototype and tests).
         claims = _claims(event)
-        caller = scope.caller_id(claims)
+        caller = scope.caller_id(claims, os.environ.get("CALLER_CLAIM", "employee_id"))
         audit["caller"] = caller
 
         # 2. Scope from the ownership export (stands in for IIQ). Fails closed.
         scope_set, account_meta = scope.resolve_scope_meta(caller, store)
         audit["scope_hash"] = hashlib.sha256(",".join(sorted(scope_set)).encode()).hexdigest()[:16]
+
+        if route != "POST /investigations":
+            audit["outcome"] = "listed"
+            return {"status": "ok", "accounts": [{"account": a, "type": account_meta.get(a) or "unknown"} for a in sorted(scope_set)]}
 
         # 3. Request validation. Account must be well formed AND in scope.
         req = _request(event)
@@ -77,8 +100,9 @@ def handler(event, context=None, store=None, model=None):
         audit.update(account=account, window=[start.isoformat(), end.isoformat()])
 
         # 4. Collect. Every tool re-checks scope itself.
-        pack = evidence.collect(account, start, end, scope_set, store)
+        pack = evidence.collect(account, start, end, scope_set, backend or backends.make_backend(store))
         audit["query_ids"] = pack["query_ids"]
+        audit["source_errors"] = {k: pack[k]["error_detail"] for k in backends.ROW_CAP if pack[k].get("error_detail")}
 
         # 5. Findings (all numbers computed here, never by the model).
         facts = findings.compute(account, start, end, pack, account_meta.get(account))
