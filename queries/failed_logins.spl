@@ -1,0 +1,4 @@
+search index=<win_security> EventCode IN (4625,4771,4776) user="{account}" earliest="{start}" latest="{end}"
+| fields _time EventCode user src src_ip Status Sub_Status Failure_Code Logon_Type dest
+| sort 0 _time
+| head 5000

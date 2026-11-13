@@ -30,6 +30,7 @@ facts table and the summary is withheld. The design brief is in [`docs/design-br
 | Caller identity | Test claims in the event (`ALLOW_TEST_CLAIMS=true`) | Entra JWT through an API Gateway authorizer |
 | Ownership | `ownership/ownership.json` in S3, generated | SailPoint IIQ API or scheduled export |
 | Evidence | `evidence/<account>.json` in S3, generated | Splunk first, Databricks end state, same three functions |
+| Query templates | `queries/` plus `src/querypack.py`, tested but not wired or verified live | Called by the Splunk and Databricks backends |
 | Skill files | `data/skills/` synced to S3 | Same, with pull request review |
 | Audit | One `AUDIT` JSON line per request in CloudWatch | Plus immutable S3 copy and forward to the SIEM |
 

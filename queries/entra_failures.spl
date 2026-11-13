@@ -1,0 +1,4 @@
+search index=<entra_signin> user="{account}" NOT status.errorCode=0 earliest="{start}" latest="{end}"
+| fields _time user status.errorCode clientAppUsed appDisplayName ipAddress
+| sort 0 _time
+| head 5000
