@@ -71,7 +71,26 @@ In the stack these are template parameters: `EvidenceBackend`, `SplunkBaseUrl`, 
 - The role gains `secretsmanager:GetSecretValue` on the one secret ARN only when `BackendTokenSecretArn` is set.
 - Corporate TLS inspection: point `SSL_CERT_FILE` at your CA bundle. Certificate verification is never turned off in this code.
 
+## Ownership from an IIQ report
+
+Until the IIQ API is connected, a scheduled ownership report exported as CSV is the simplest honest source:
+
+```bash
+python tools/import_ownership.py report.csv --out data/ownership/ownership.json \
+  --owner-col "Owner Employee ID" --account-col "Account Name" \
+  --app-col Application --type-col "Account Type" --tier-col Tier \
+  --deny-file deny.txt --require-tier
+```
+
+- The owner column must hold the same identifier as the token claim set in `CallerClaim`.
+- Rows with no owner or a malformed account name are skipped and counted. Nothing is inferred.
+- `--require-tier` refuses to write a file if any row lacks a tier. Without it, a missing tier is treated as
+  not Tier 0, so use the flag for anything beyond a demo.
+- `deny.txt` lists accounts that are never investigable through self-service, one per line.
+- Upload the result to `ownership/ownership.json` in the data bucket. Stale ownership is a real risk: record
+  how often the report runs and treat an old file as an outage.
+
 ## Not built yet
 
-- IIQ as the ownership source. Ownership is still a JSON file. This is the next real integration.
+- The IIQ API as a live ownership source, and a freshness check that fails closed when the export is old.
 - Paging beyond the row caps, and per-caller rate limits.
