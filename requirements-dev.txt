@@ -1,0 +1,9 @@
+# Tooling for tests and the quality gates in .github/workflows/ci.yml
+pytest==9.1.1
+pytest-cov==7.1.0
+pyyaml==6.0.3
+ruff==0.17.5
+bandit==1.9.4
+pip-audit==2.10.1
+cfn-lint==1.60.1
+-r agent/requirements.txt

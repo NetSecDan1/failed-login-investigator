@@ -110,7 +110,7 @@ def compute(account, start, end, pack, account_type=None):
     times = [_ts(r["time"]) for r in rows]
     total = len(rows)
 
-    deltas = [(b - a).total_seconds() for a, b in zip(times, times[1:])]
+    deltas = [(b - a).total_seconds() for a, b in zip(times, times[1:], strict=False)]
     cadence = None
     if len(deltas) >= 5:
         med = statistics.median(deltas)
@@ -120,11 +120,11 @@ def compute(account, start, end, pack, account_type=None):
 
     # Per-host rhythm: a fleet of systems each retrying on its own timer looks irregular when merged.
     by_host_times = {}
-    for r, t in zip(rows, times):
+    for r, t in zip(rows, times, strict=True):
         by_host_times.setdefault(host(r.get("src_host")), []).append(t)
     judged = regular_hosts = 0
     for ts in by_host_times.values():
-        d = [(b - a).total_seconds() for a, b in zip(ts, ts[1:])]
+        d = [(b - a).total_seconds() for a, b in zip(ts, ts[1:], strict=False)]
         if len(d) >= 4:
             judged += 1
             m = statistics.fmean(d)

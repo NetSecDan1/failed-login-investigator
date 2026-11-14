@@ -11,7 +11,7 @@ def to_text(result):
     if "accounts" in result:
         return "Accounts you own:\n" + "\n".join("  %-28s %s" % (a["account"], a["type"]) for a in result["accounts"])
     f, rep = result["facts"], result.get("report")
-    ad, en, sig = f["ad"], f["entra"], f["signals"]
+    ad, en = f["ad"], f["entra"]
     out = ["Failed login investigation: %s (%s account)" % (f["account"], f["account_type"]),
            "Window: %s to %s" % (f["window"]["start"], f["window"]["end"]), ""]
     if result.get("must_escalate"):

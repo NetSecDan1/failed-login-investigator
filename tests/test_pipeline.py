@@ -1,6 +1,6 @@
 import json, os
 from conftest import FILES, STORE, END, ev, no_model, top_choice_model
-import handler, evidence, validator, findings, scope, skillmatch
+import handler, evidence, scope
 
 CALLS = []
 

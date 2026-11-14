@@ -88,9 +88,12 @@ def normalize(kind, raw_rows, field_map):
 
 
 def urllib_transport(method, url, headers, body, timeout):
+    if not url.lower().startswith("https://"):                          # no file:, ftp: or plain http, ever
+        raise ValueError("only https URLs are allowed")
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:      # TLS verification stays on
+        # Scheme is checked above and TLS verification stays on.
+        with urllib.request.urlopen(req, timeout=timeout) as resp:      # nosec B310
             return resp.status, resp.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()
@@ -210,7 +213,7 @@ class DatabricksBackend(Backend):
         if state != "SUCCEEDED":
             raise RuntimeError("databricks statement state %s" % state)
         cols = [c["name"] for c in resp["manifest"]["schema"]["columns"]]
-        raw = [dict(zip(cols, r)) for r in (resp.get("result") or {}).get("data_array") or []]
+        raw = [dict(zip(cols, r, strict=False)) for r in (resp.get("result") or {}).get("data_array") or []]
         rows, dropped = normalize(kind, raw, self.field_map)
         note = "rows_dropped_no_time:%d" % dropped if dropped else None
         if resp["manifest"].get("truncated"):

@@ -25,7 +25,7 @@ def _parse_window(event):
         if end.tzinfo is None:
             end = end.replace(tzinfo=timezone.utc)
     except (AttributeError, ValueError):
-        raise scope.Denied("bad_window", "End time is not valid.")
+        raise scope.Denied("bad_window", "End time is not valid.") from None
     return end - timedelta(hours=hours), end
 
 
@@ -51,11 +51,28 @@ def _request(event):
 
 
 def _audit(rec):
+    """One audit line per request. Identifiers and outcomes only: no raw log rows, no narrative text."""
     rec["ts"] = datetime.now(timezone.utc).isoformat()
     print("AUDIT " + json.dumps(rec, sort_keys=True))
+    if os.environ.get("METRICS_EMF", "false").lower() == "true":
+        _emit_metrics(rec)
 
 
-HTTP_STATUS = {"unauthenticated": 401, "out_of_scope": 403, "scope_empty": 403, "ownership_unavailable": 503}
+def _emit_metrics(rec):
+    """CloudWatch embedded metric format. The log line becomes metrics with no extra permissions."""
+    values = {"Requests": 1, "LatencyMs": rec.get("latency_ms", 0), "InputTokens": rec.get("tokens_in", 0),
+              "OutputTokens": rec.get("tokens_out", 0), "ModelCalls": rec.get("model_calls", 0),
+              "ValidatorRejects": rec.get("validator_rejects", 0), "Escalations": 1 if rec.get("must_escalate") else 0,
+              "Reports": 1 if rec.get("outcome") == "report" else 0}
+    units = {"LatencyMs": "Milliseconds"}
+    print(json.dumps(dict(values, Outcome=rec.get("outcome", "error"), _aws={
+        "Timestamp": int(time.time() * 1000),
+        "CloudWatchMetrics": [{"Namespace": "FailedLoginInvestigator", "Dimensions": [["Outcome"]],
+                               "Metrics": [{"Name": k, "Unit": units.get(k, "Count")} for k in values]}]})))
+
+
+HTTP_STATUS = {"unauthenticated": 401, "out_of_scope": 403, "scope_empty": 403, "ownership_unavailable": 503,
+               "ownership_stale": 503, "disabled": 503}
 
 
 def _respond(event, result):
@@ -77,6 +94,8 @@ def _run(event, context, store, model, backend):
     route = event.get("routeKey") or event.get("action") or "POST /investigations"
     audit = {"request_id": getattr(context, "aws_request_id", "local"), "outcome": "error", "route": route}
     try:
+        if os.environ.get("AGENT_ENABLED", "true").lower() != "true":   # operator kill switch
+            raise scope.Denied("disabled", "This service is switched off. Try again later.")
         if route not in ("POST /investigations", "GET /accounts", "list_accounts"):
             raise scope.Denied("bad_route", "Unknown route.")
         # 1. Authenticate. Claims come from the API Gateway JWT authorizer. Claims passed in the
@@ -115,8 +134,12 @@ def _run(event, context, store, model, backend):
 
         # 7. The model picks among the allowed choices and writes the narrative. One retry, then facts only.
         report, notes, meta = None, [], {}
+        usage = {"in": 0, "out": 0, "calls": 0, "rejects": 0}
         for attempt in (1, 2):
             raw, meta = (model or explain.call_model)(facts, skills, matched, steps_by_id)
+            usage["calls"] += 1
+            usage["in"] += (meta.get("tokens") or {}).get("inputTokens", 0)
+            usage["out"] += (meta.get("tokens") or {}).get("outputTokens", 0)
             if raw is None:
                 notes.append("summary_withheld:" + meta.get("reason", "model_unavailable"))
                 break
@@ -129,10 +152,13 @@ def _run(event, context, store, model, backend):
                           "next_steps": [steps_by_id[cid][i - 1] for i in raw["next_step_ids"]],
                           "escalate": bool(skills["rules"][cid].get("escalate"))}
                 break
+            usage["rejects"] += 1
             notes.append("validator_reject_%d:%s" % (attempt, ";".join(errors)[:300]))
         candidates = {"allowed": choices, "must_escalate": matched["must_escalate"]}
-        audit.update(outcome="report" if report else "facts_only", model=meta.get("model"),
-                     guardrail=meta.get("guardrail"), tokens=meta.get("tokens"), notes=notes,
+        audit.update(outcome="report" if report else "facts_only", model=meta.get("model"), route_to_model=meta.get("route"),
+                     guardrail=meta.get("guardrail"), tokens_in=usage["in"], tokens_out=usage["out"],
+                     model_calls=usage["calls"], validator_rejects=usage["rejects"],
+                     must_escalate=matched["must_escalate"], notes=notes,
                      classification=(report or {}).get("classification_id"), candidates=candidates,
                      skills_version=skills["version"])
         # must_escalate is decided by code, so the caller sees it even when the summary is withheld.
@@ -143,4 +169,5 @@ def _run(event, context, store, model, backend):
         audit.update(outcome="denied", reason=d.code)
         return {"status": "denied", "reason": d.code, "message": d.message}
     finally:
+        audit["latency_ms"] = int((time.time() - t0) * 1000)
         _audit(audit)

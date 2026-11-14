@@ -4,6 +4,31 @@ Parameters:
   ModelId:
     Type: String
     Description: Bedrock inference profile ID or model ID for an Anthropic Claude model
+  AgentEnabled:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Operator kill switch. "false" makes every request return a service-off response without touching identity, data or the model.
+  ModelRoute:
+    Type: String
+    Default: bedrock
+    AllowedValues: [bedrock, gateway]
+    Description: How the model is reached. "gateway" sends requests to an OpenAI-compatible model gateway instead of calling Bedrock directly.
+  ModelGatewayUrl: {Type: String, Default: ""}
+  ModelGatewayTokenSecretArn:
+    Type: String
+    Default: ""
+    Description: Optional. Secrets Manager ARN holding the model gateway token as a plain string.
+  ModelMaxOutputTokens: {Type: Number, Default: 1200}
+  ModelTimeoutSeconds: {Type: Number, Default: 60}
+  OwnershipMaxAgeHours:
+    Type: Number
+    Default: 0
+    Description: Refuse requests when the ownership data is older than this. 0 turns the check off, which is only acceptable with synthetic data.
+  AlarmTopicArn:
+    Type: String
+    Default: ""
+    Description: Optional. SNS topic for operational alarms. Alarms are created only when this is set.
   AllowTestClaims:
     Type: String
     Default: "true"
@@ -58,6 +83,8 @@ Parameters:
 Conditions:
   HasApi: !Not [!Equals [!Ref JwtIssuer, ""]]
   HasSecret: !Not [!Equals [!Ref BackendTokenSecretArn, ""]]
+  HasGatewaySecret: !Not [!Equals [!Ref ModelGatewayTokenSecretArn, ""]]
+  HasAlarms: !Not [!Equals [!Ref AlarmTopicArn, ""]]
   HasBoundary: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
   InVpc: !Not [!Equals [!Join ["", !Ref VpcSubnetIds], ""]]
 Resources:
@@ -130,6 +157,13 @@ Resources:
                   Resource: !Ref BackendTokenSecretArn
                 - !Ref AWS::NoValue
               - !If
+                - HasGatewaySecret
+                - Sid: ReadModelGatewayToken
+                  Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref ModelGatewayTokenSecretArn
+                - !Ref AWS::NoValue
+              - !If
                 - InVpc
                 - Sid: ManageOwnNetworkInterfaces
                   Effect: Allow
@@ -176,6 +210,14 @@ Resources:
           GUARDRAIL_ID: !GetAtt Guardrail.GuardrailId
           GUARDRAIL_VERSION: DRAFT
           EVIDENCE_BACKEND: !Ref EvidenceBackend
+          AGENT_ENABLED: !Ref AgentEnabled
+          METRICS_EMF: "true"
+          MODEL_ROUTE: !Ref ModelRoute
+          MODEL_GATEWAY_URL: !Ref ModelGatewayUrl
+          MODEL_GATEWAY_TOKEN_SECRET_ARN: !If [HasGatewaySecret, !Ref ModelGatewayTokenSecretArn, ""]
+          MODEL_MAX_OUTPUT_TOKENS: !Ref ModelMaxOutputTokens
+          MODEL_TIMEOUT_SECONDS: !Ref ModelTimeoutSeconds
+          OWNERSHIP_MAX_AGE_HOURS: !Ref OwnershipMaxAgeHours
           ALLOW_TEST_CLAIMS: !Ref AllowTestClaims
           CALLER_CLAIM: !Ref CallerClaim
           SPLUNK_BASE_URL: !Ref SplunkBaseUrl
@@ -196,6 +238,52 @@ Resources:
         ZipFile: |
           def handler(event, context):
               return {"status": "placeholder", "message": "run deploy.sh to upload code"}
+  # Operational alarms. Metrics come from the embedded metric lines the function writes.
+  AlarmFunctionErrors:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasAlarms
+    Properties:
+      AlarmDescription: The investigator function is failing. See docs/OPERATIONS.md.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions: [{Name: FunctionName, Value: !Ref Function}]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopicArn]
+  AlarmValidatorRejects:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasAlarms
+    Properties:
+      AlarmDescription: The model's output is being rejected by the validator more than expected. Possible model drift, prompt attack or skill wording problem.
+      Namespace: FailedLoginInvestigator
+      MetricName: ValidatorRejects
+      Dimensions: [{Name: Outcome, Value: facts_only}]
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopicArn]
+  AlarmMandatoryEscalations:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasAlarms
+    Properties:
+      AlarmDescription: An investigation ended in a mandatory escalation. Security operations should expect contact from the account owner.
+      Namespace: FailedLoginInvestigator
+      MetricName: Escalations
+      Dimensions: [{Name: Outcome, Value: report}]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopicArn]
   Api:
     Type: AWS::ApiGatewayV2::Api
     Condition: HasApi

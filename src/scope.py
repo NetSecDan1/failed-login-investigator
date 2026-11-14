@@ -1,5 +1,6 @@
 """Scope resolution. Deterministic, fail closed. The model never sees or sets any of this."""
-import json, re
+import json, os, re
+from datetime import datetime, timezone
 
 ACCOUNT_RE = re.compile(r"^[a-z0-9._$-]{1,64}$")
 
@@ -21,6 +22,22 @@ def caller_id(claims, claim_name="employee_id"):
     return cid
 
 
+def _check_fresh(export):
+    """Stale ownership is treated as an outage. Off unless OWNERSHIP_MAX_AGE_HOURS is set above zero."""
+    max_age = float(os.environ.get("OWNERSHIP_MAX_AGE_HOURS", "0") or 0)
+    if max_age <= 0:
+        return
+    try:
+        made = datetime.fromisoformat(str(export["_generated"]).replace("Z", "+00:00"))
+        if made.tzinfo is None:
+            made = made.replace(tzinfo=timezone.utc)
+        age_hours = (datetime.now(timezone.utc) - made).total_seconds() / 3600
+    except Exception:
+        raise Denied("ownership_stale", "Ownership data has no usable timestamp. Try again later.") from None
+    if age_hours > max_age or age_hours < -1:
+        raise Denied("ownership_stale", "Ownership data is out of date. Try again later.")
+
+
 def resolve_scope_meta(caller, store):
     """Return (frozenset of owned account names, {name: account type}). Any error or empty result denies."""
     try:
@@ -28,12 +45,15 @@ def resolve_scope_meta(caller, store):
         owners = {str(k).lower(): v for k, v in export["owners"].items()}
         owned = owners.get(caller.lower(), [])
         deny = {d.lower() for d in export.get("deny_list", [])}
+        # Conflicting records resolve to the most restrictive: Tier 0 anywhere means Tier 0 for everyone.
+        tier0 = {str(a.get("account", "")).lower() for entries in owners.values() for a in entries if a.get("tier") == 0}
     except Exception:
-        raise Denied("ownership_unavailable", "Ownership source unavailable. Try again later.")
+        raise Denied("ownership_unavailable", "Ownership source unavailable. Try again later.") from None
+    _check_fresh(export)
     meta = {}
     for a in owned:
         name = str(a.get("account", "")).lower()
-        if a.get("tier") == 0 or name in deny or not ACCOUNT_RE.fullmatch(name):
+        if name in tier0 or name in deny or not ACCOUNT_RE.fullmatch(name):
             continue
         meta[name] = a.get("type")
     if not meta:

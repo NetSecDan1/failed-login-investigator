@@ -3,7 +3,7 @@ import json, urllib.parse
 from datetime import datetime, timedelta, timezone
 import pytest
 from conftest import STORE, ev, no_model
-import backends, evidence, handler, scope
+import backends, handler, scope
 
 S = frozenset({"svc-batch01"})
 T1 = datetime(2026, 11, 12, 18, tzinfo=timezone.utc)

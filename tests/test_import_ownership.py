@@ -1,6 +1,6 @@
 import importlib.util, json, os
 import pytest
-from conftest import ROOT, STORE
+from conftest import ROOT
 import evidence, scope
 
 spec = importlib.util.spec_from_file_location("import_ownership", os.path.join(ROOT, "tools", "import_ownership.py"))

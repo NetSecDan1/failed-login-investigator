@@ -1,0 +1,7 @@
+# Runtime dependencies for the agent container. The Lambda path in src/ needs none of these.
+strands-agents==1.65.0
+bedrock-agentcore==1.26.0
+PyJWT[crypto]==2.15.0
+boto3>=1.40
+# Only for MODEL_ROUTE=gateway:
+openai>=1.50

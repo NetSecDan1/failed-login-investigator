@@ -1,3 +1,4 @@
+# Quality gates. Every job must pass before a change is considered releasable.
 name: ci
 on:
   push:
@@ -6,14 +7,84 @@ permissions:
   contents: read
 jobs:
   test:
+    name: unit tests and coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - run: pip install pytest pyyaml cfn-lint
+        with: {python-version: "3.13", cache: pip}
+      - run: pip install -r requirements-dev.txt
       - run: python tools/build_skill_index.py --check
-      - run: python -m pytest -q tests
-      - run: cfn-lint template.yaml
+      - run: python -m pytest -q --cov=src --cov=agent --cov-report=term-missing tests
+  lint:
+    name: lint (correctness rules)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - run: pip install ruff==0.17.5
+      - run: ruff check .
       - run: bash -n deploy.sh run_tests.sh teardown.sh
+  static-security:
+    name: static security analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - run: pip install bandit==1.9.4
+      - name: Shipped code, all severities
+        run: bandit -q -r src agent
+      - name: Developer tools, medium and above
+        run: bandit -q -ll -r tools
+  dependencies:
+    name: dependency vulnerability audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - run: pip install pip-audit==2.10.1
+      - run: pip-audit -r agent/requirements.txt
+  secrets:
+    name: secret scan (full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 detect --source /repo --redact --no-banner
+  infrastructure:
+    name: infrastructure template lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - run: pip install cfn-lint==1.60.1
+      - run: cfn-lint template.yaml infra/github-oidc.yaml
+  package:
+    name: build artifact with checksums and dependency inventory
+    needs: [test, lint, static-security, dependencies, secrets, infrastructure]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - name: Build function package
+        run: |
+          (cd src && zip -qr ../function.zip . -x '__pycache__/*') && zip -qr function.zip queries config
+          tar -czf skills.tar.gz skills
+          pip install -q -r agent/requirements.txt && pip freeze > agent-dependency-inventory.txt
+          sha256sum function.zip skills.tar.gz agent-dependency-inventory.txt > SHA256SUMS
+          echo "commit ${GITHUB_SHA}" >> SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: |
+            function.zip
+            skills.tar.gz
+            agent-dependency-inventory.txt
+            SHA256SUMS
+          retention-days: 30

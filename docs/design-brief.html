@@ -152,7 +152,7 @@ footer{padding:24px 0 48px;color:var(--muted);font-size:14px}
         <li><strong>Splunk as the v1 evidence source</strong> through a small tool layer with fixed query templates. No model-written SPL or SQL.</li>
         <li><strong>IIQ ownership resolved in code</strong> from the caller's verified Entra token. Fail closed.</li>
         <li><strong>Skill files in a Git repo, published to versioned S3.</strong> PR reviewed. The model picks from them, it cannot edit them.</li>
-        <li><strong>Pilot with the identity team</strong>, then open to account owners through a SharePoint page.</li>
+        <li><strong>Pilot with the identity team</strong>, then open to account owners through an internal web page.</li>
       </ul>
     </div>
     <div class="card">
@@ -183,7 +183,7 @@ footer{padding:24px 0 48px;color:var(--muted);font-size:14px}
         <tr><td class="mono">A1</td><td>IIQ exposes account ownership through its SCIM or REST API, or through a scheduled export, for both a person's own accounts and the service or secondary IDs they own.</td><td>Step 2 changes. Ownership modeling varies by install, so confirm which attribute holds "owner" before coding.</td></tr>
         <tr><td class="mono">A2</td><td>AD security events 4625, 4771, 4776 and 4740 from all domain controllers are already in Splunk. Entra sign-in logs are in Splunk or can be.</td><td>Use the Databricks or discovery path under Options. The agent must report missing sources instead of concluding from silence.</td></tr>
         <tr><td class="mono">A3</td><td>"AD audit" means a product such as ADAudit Plus. Treated as optional corroboration, not a primary source.</td><td>Promote it to a primary tool behind the same contract.</td></tr>
-        <tr><td class="mono">A4</td><td>Users sign in with Entra ID SSO and a SharePoint page can call an internal API with an Entra token.</td><td>Front end option changes. The pipeline does not.</td></tr>
+        <tr><td class="mono">A4</td><td>Users sign in with single sign-on and an internal web page can call an internal API with the user's token.</td><td>Front end option changes. The pipeline does not.</td></tr>
         <tr><td class="mono">A5</td><td>An approved Anthropic Claude model is available to you in Bedrock in an approved region.</td><td>Any tool-capable Bedrock model works with the Converse API. Re-run the eval set.</td></tr>
         <tr><td class="mono">A6</td><td>The identity admin persona follows the same owned-IDs rule in v1. A wider delegated scope is a later governance decision.</td><td>Add a second scope policy with its own approval, never a bypass flag.</td></tr>
         <tr><td class="mono">A7</td><td>The Lambda runtime is Python. Nothing here needs third party agent frameworks in v1.</td><td>Same design in any runtime your golden path prefers.</td></tr>
@@ -199,7 +199,7 @@ footer{padding:24px 0 48px;color:var(--muted);font-size:14px}
   <div class="pipe">
     <div class="stage"><div class="num">1</div><div class="body">
       <div class="head"><strong>Authenticate</strong><span class="chip code">CODE</span></div>
-      <p>SharePoint page gets an Entra token for the API. API Gateway JWT authorizer validates issuer, audience, expiry. Caller identity comes from token claims only. Nothing typed in chat can change who the caller is.</p>
+      <p>The internal web page gets a token for the API. API Gateway JWT authorizer validates issuer, audience, expiry. Caller identity comes from token claims only. Nothing typed in chat can change who the caller is.</p>
     </div></div>
     <div class="stage"><div class="num">2</div><div class="body">
       <div class="head"><strong>Resolve scope from IIQ</strong><span class="chip code">CODE</span><span class="chip bad">fail closed</span></div>
@@ -334,8 +334,8 @@ footer{padding:24px 0 48px;color:var(--muted);font-size:14px}
       <p>Identity team runs it with their own Entra token. Zero UI work. Proves the pipeline and builds the eval set.</p>
     </div>
     <div class="card">
-      <h3>SharePoint page (SPFx)</h3>
-      <p>Web part calls the API with the user's Entra token. Account picker, window picker, report view. Avoids the Power Automate connector DLP problem because it is a direct authenticated API call.</p>
+      <h3>Internal web page</h3>
+      <p>A page calls the API with the user's token. Account picker, window picker, report view.</p>
     </div>
     <div class="card">
       <h3>Teams bot</h3>
@@ -354,8 +354,8 @@ footer{padding:24px 0 48px;color:var(--muted);font-size:14px}
       <p>Worth it once there are many playbooks or long runbooks. Adds retrieval variance, so pin the eval set first.</p>
     </div>
     <div class="card">
-      <h3>SharePoint as source</h3>
-      <p>Where the tribal knowledge already sits. Sync approved pages into the Git repo rather than reading SharePoint live, so content changes get review.</p>
+      <h3>Existing knowledge base as source</h3>
+      <p>Where the tribal knowledge already sits. Sync approved pages into the Git repo rather than reading the knowledge base live, so content changes get review.</p>
     </div>
   </div>
 </section>
@@ -604,12 +604,12 @@ policy. Reply with JSON matching the Report schema only.</code></pre>
   </details>
 
   <details class="step">
-    <summary><span class="n">Step 9</span><span class="t">Pilot, then SharePoint, then decide on AgentCore</span><span class="chip">weeks 2 to 6</span></summary>
+    <summary><span class="n">Step 9</span><span class="t">Pilot, then web page, then decide on AgentCore</span><span class="chip">weeks 2 to 6</span></summary>
     <div class="in">
       <ol>
         <li><strong>Identity team pilot (2 weeks):</strong> CLI only. Every real lockout ticket gets run through it. Engineers grade each report right, partly right or wrong. Wrong answers become eval cases and skill file edits.</li>
         <li><strong>Exit gate:</strong> zero scope failures in tests, facts table accuracy 100% against manual checks, classification agreement with engineers at a target you set (suggest 85% or better), and security sign-off.</li>
-        <li><strong>Account owner release:</strong> SPFx page for a pilot group of service account owners. Add the escalation banner and the link to the unlock path.</li>
+        <li><strong>Account owner release:</strong> internal web page for a pilot group of service account owners. Add the escalation banner and the link to the unlock path.</li>
         <li><strong>Databricks cutover:</strong> when the tables exist, run both backends for a week, diff, switch the flag.</li>
         <li><strong>AgentCore decision:</strong> move to option B only if users need follow-up conversation that the single report cannot serve. Carry the tools over as Gateway targets and add Cedar rules as a second gate.</li>
       </ol>
@@ -657,7 +657,7 @@ policy. Reply with JSON matching the Report schema only.</code></pre>
       <ol start="6">
         <li>Is there a standard Bedrock Guardrail baseline that every workload must attach?</li>
         <li>Who must sign off: security architecture, CSOC, AI governance, IIQ owners, records management?</li>
-        <li>Is a SharePoint SPFx web part calling an internal API allowed under current DLP, and who approves the API permission?</li>
+        <li>Is an internal web page calling this API allowed under current data loss prevention policy, and who approves the API permission?</li>
         <li>Where must AI workload audit logs go, and for how long?</li>
       </ol>
     </div>

@@ -1,5 +1,5 @@
 """The only model step. No tools that fetch data: the model can only fill in the report form."""
-import json, os
+import json
 
 SYSTEM = (
     "You explain failed-login evidence for one account to the person who owns it.\n"
@@ -55,36 +55,5 @@ def build_user_text(facts, skills, matched, steps_by_id):
 
 
 def call_model(facts, skills, matched, steps_by_id):
-    import boto3
-    from botocore.config import Config
-    client = boto3.client("bedrock-runtime", config=Config(read_timeout=60, retries={"max_attempts": 2}))
-    model_id = os.environ["MODEL_ID"]
-    meta = {"model": model_id}
-    kwargs = dict(
-        modelId=model_id,
-        system=[{"text": SYSTEM}],
-        messages=[{"role": "user", "content": [{"text": build_user_text(facts, skills, matched, steps_by_id)}]}],
-        inferenceConfig={"maxTokens": 1200, "temperature": 0},
-        toolConfig={"tools": [{"toolSpec": {"name": "submit_report",
-                                             "description": "Submit the investigation report.",
-                                             "inputSchema": {"json": REPORT_SCHEMA}}}],
-                    "toolChoice": {"tool": {"name": "submit_report"}}},
-    )
-    if os.environ.get("GUARDRAIL_ID"):
-        kwargs["guardrailConfig"] = {"guardrailIdentifier": os.environ["GUARDRAIL_ID"],
-                                     "guardrailVersion": os.environ.get("GUARDRAIL_VERSION", "DRAFT")}
-    try:
-        resp = client.converse(**kwargs)
-    except Exception as e:  # model failure never blocks the facts table
-        meta["reason"] = "model_error:" + type(e).__name__ + ":" + str(e)[:200]
-        return None, meta
-    meta["tokens"] = resp.get("usage", {})
-    meta["guardrail"] = "intervened" if resp.get("stopReason") == "guardrail_intervened" else "passed"
-    if meta["guardrail"] == "intervened":
-        meta["reason"] = "guardrail_intervened"
-        return None, meta
-    for block in resp["output"]["message"]["content"]:
-        if "toolUse" in block:
-            return block["toolUse"]["input"], meta
-    meta["reason"] = "no_report_returned"
-    return None, meta
+    import modelroute
+    return modelroute.call_report(SYSTEM, build_user_text(facts, skills, matched, steps_by_id), REPORT_SCHEMA)

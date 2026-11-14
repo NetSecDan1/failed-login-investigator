@@ -95,12 +95,31 @@ option is not available in that account. Do not work around it. Use another opti
 **Status:** the templates pass lint. This path has not been deployed. The first attempt in the test account
 was stopped by an organization service control policy on OIDC providers.
 
-## Option E: Your organization's pipeline
+## Option E: Managed agent runtime
 
-For an enterprise golden path, treat `template.yaml` as the reference, not the delivery vehicle. Port the five
-resources to the approved IaC tool and pipeline, keep the IAM statements as written, and carry the tests and
-`run_tests.sh` cases over as pipeline gates. Decide these before porting: approved models and regions, where
-audit logs must land, and how the function reaches Splunk, Databricks and IIQ.
+`agent/` packages the same pipeline for a managed agent runtime. **Not built into an image or deployed yet.
+Tested with a scripted model only.**
+
+```bash
+docker build --platform linux/arm64 -f agent/Dockerfile -t fli-agent .
+```
+
+Settings the container needs: `DATA_BUCKET`, `MODEL_ID`, `MODEL_ROUTE`, and for identity `JWT_ISSUER`,
+`JWT_AUDIENCE`, `JWT_JWKS_URL`, `CALLER_CLAIM`. Configure the runtime's inbound authorizer for the same issuer
+and audience and have it pass the `Authorization` header through. The application verifies the token again, so
+scope never depends on one control at the edge. Give the runtime's role the same read-only permissions as the
+function role in `template.yaml`.
+
+Requests: `{"action": "list_accounts"}`, `{"action": "investigate", "account": "...", "window_hours": 24}`, or
+`{"prompt": "..."}`. Structured requests use no routing model.
+
+## Option F: Your organization's standard path
+
+If the adopting organization has a template, reference architecture and shared pipeline for agents, start from
+those and move this code into them. Do not run this repository's layout in parallel. Keep the role statements,
+the tests, the golden cases and the gates, and map each CI job to the required scanner or attestation. Confirm
+first: approved framework, runtime, models and model route, identity pattern, where audit logs must land, and how
+the workload reaches the log and ownership sources. Record the answers in `docs/STATUS.md`.
 
 ## Turning on the HTTP API
 

@@ -1,9 +1,11 @@
 # Failed Login Investigator
 
-A read-only agent on AWS Bedrock that explains why an account keeps failing to log in.
+A read-only agent that explains why an account keeps failing to log in.
 It only looks at accounts the caller owns, and that rule is enforced by code the model cannot touch.
 
-**Status: prototype, verified on synthetic data only.** Splunk and Databricks clients exist but have never touched a live system. Nothing here connects to AD, Entra or IIQ.
+**Status: a constrained prototype, verified on synthetic data only.** It is not approved, not production-ready and
+not evidence of compliance with any organization's standard path. [`docs/STATUS.md`](docs/STATUS.md) lists every
+requirement with what is and is not evidenced. Contributors and coding agents: read [`AGENTS.md`](AGENTS.md) first.
 
 ## How it works
 
@@ -61,13 +63,15 @@ Other ways to deploy, the HTTP API and its parameters: [`docs/DEPLOY.md`](docs/D
 
 | Path | What |
 |------|------|
-| `src/` | The pipeline. `handler.py` is the entry point |
+| `src/` | The pipeline. `handler.py` is the entry point. `modelroute.py` decides how the model is reached |
 | `skills/` | 13 skills, each `SKILL.md` plus `rules.json` |
 | `queries/`, `config/field_map.json` | Fixed query templates and the source field mapping |
 | `evals/cases.json` | One synthetic case per skill |
 | `tools/` | Local CLI, data generator, skill index builder, live eval runner |
 | `tests/` | Offline tests, no network |
-| `docs/` | Deploy guide, skills guide, backends guide, design brief |
+| `agent/` | Entry point for a managed agent runtime, built on a standard agent framework |
+| `infra/` | Optional pipeline deploy role |
+| `docs/` | Status, use case, risks, operations, measurement, deploy, skills and backends guides, design brief |
 
 ## Tests
 
@@ -93,10 +97,35 @@ the evidence does not support, a model trying to talk down a mandatory escalatio
 - Next steps are approved templates rendered by code. The model returns step numbers, never step text.
 - The report is shown only if every host, IP and account in it already appears in the evidence.
 
+## Two ways to run it
+
+| | Function behind an HTTP API | Managed agent runtime |
+|---|---|---|
+| Code | `src/handler.py`, `template.yaml` | `agent/app.py`, `agent/Dockerfile` |
+| Input | Typed request: account and window | Typed request, or a sentence that a routing model maps to one of two typed tools |
+| Model use | One call to explain, one retry at most | The same, plus a small routing call for free-text requests |
+| State | Deployed once to a sandbox on an early build | Unit tested with a scripted model. Not deployed |
+
+Both run the same pipeline, and in both the reply is rendered by code from validated results. The model is
+reached through `MODEL_ROUTE`: `bedrock` for a direct call, or `gateway` for a central model gateway with an
+OpenAI-compatible API. Which combination an organization permits is an owner decision recorded in `docs/STATUS.md`.
+
+## Delivery gates
+
+Every push runs unit tests with a coverage floor, lint, static security analysis, a dependency audit, a secret
+scan over full history, infrastructure lint, and builds a checksummed artifact. These are stand-ins for whatever
+scanners and attestations an adopting organization requires.
+
+## Operating it
+
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md) covers what is logged, metrics, alarms, limits, the kill switch and a
+runbook. [`docs/MEASUREMENT.md`](docs/MEASUREMENT.md) covers cost per successfully completed investigation and why
+no return on investment is claimed yet. [`docs/RISKS.md`](docs/RISKS.md) is the working risk register.
+
 ## Known limits
 
 - Not 100% safe, and nothing is. What is guaranteed by construction is no write path and no out-of-scope read. Wrong explanations and stale ownership data remain possible.
+- No live model, token, ownership source, log source or model gateway has been exercised.
 - The entity check in the validator is a heuristic (tokens that mix letters and digits). Expect occasional false rejects, which fall back to facts only.
-- The model-facing wording of the skills has not been evaluated against a live model yet. Thresholds in `rules.json` were set against synthetic data.
-- API throttling is global, not per caller. No UI yet.
-- IIQ is not connected. Ownership is still a JSON file.
+- Skill wording has not been evaluated against a live model. Thresholds in `rules.json` were set against synthetic data.
+- API throttling is global, not per caller. No user interface.

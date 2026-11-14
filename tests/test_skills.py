@@ -1,7 +1,7 @@
 """Lint for the skill library plus golden cases for the deterministic matcher."""
 import json, os, re, subprocess, sys
 import pytest
-from conftest import FILES, STORE, ROOT, ev, no_model, top_choice_model
+from conftest import STORE, ROOT, ev, no_model, top_choice_model
 import handler, skillmatch, explain
 
 SKILLS = os.path.join(ROOT, "skills")

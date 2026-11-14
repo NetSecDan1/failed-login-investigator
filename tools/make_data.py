@@ -78,5 +78,6 @@ own["owners"]["E5000"] = [{"account": a, "application": app, "tier": 2, "type": 
     ("ev-disabled", "AD", "service"), ("ev-pwexpired", "AD", "service"), ("ev-acctexpired", "AD", "person"), ("ev-skew", "AD", "service"),
     ("ev-restrict", "AD", "person"), ("ev-aftermath", "AD", "service"), ("ev-nochange", "AD", "service"), ("ev-cablock", "Entra", "person"),
     ("ev-legacy", "Entra", "person"), ("ev-mfa", "Entra", "person"), ("ev-cloudspray", "Entra", "person"), ("ev-fleet", "AD", "service")]]
+own["_generated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 W("ownership/ownership.json", own)
 print("synthetic data written")
