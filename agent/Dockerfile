@@ -6,8 +6,10 @@ WORKDIR /app
 # Take the base image's pending security fixes, then install pinned dependencies under patched constraints.
 RUN apt-get update && apt-get -y upgrade && rm -rf /var/lib/apt/lists/*
 COPY agent/requirements.txt agent/constraints.txt agent/
-RUN pip install --no-cache-dir -c agent/constraints.txt -r agent/requirements.txt \
-    && pip install --no-cache-dir -c agent/constraints.txt --upgrade setuptools
+RUN pip install --no-cache-dir -c agent/constraints.txt -r agent/requirements.txt
+# The running service never installs anything, so the installer and its bundled libraries are removed.
+RUN python -m pip uninstall -y setuptools pip \
+    && rm -rf /usr/local/lib/python3.13/ensurepip /usr/local/lib/python3.13/site-packages/pip* /root/.cache
 COPY src/ src/
 COPY queries/ queries/
 COPY config/ config/

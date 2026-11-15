@@ -99,6 +99,9 @@ jobs:
           out = run({'action': 'investigate', 'account': 'svc-batch01', 'claims': {'employee_id': 'E1001'}}, {})
           assert out['status'] == 'denied' and out['reason'] == 'unauthenticated', out
           print('refused as expected:', out['reason'])"
+      - name: Where patched packages live in the image
+        run: |
+          docker run --rm fli-agent:ci sh -c "find / -xdev \\( -iname 'urllib3-*' -o -iname 'msgpack-*' -o -iname 'setuptools-*' -o -iname 'pip-*' \\) 2>/dev/null | head -30; python -c 'import urllib3; print(urllib3.__version__)'"
       - name: Vulnerability scan (blocks on fixable high and critical findings)
         run: |
           set -o pipefail
