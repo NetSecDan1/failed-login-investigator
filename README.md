@@ -71,7 +71,8 @@ Other ways to deploy, the HTTP API and its parameters: [`docs/DEPLOY.md`](docs/D
 | `tests/` | Offline tests, no network |
 | `agent/` | Entry point for a managed agent runtime, built on a standard agent framework |
 | `infra/` | Optional pipeline deploy role |
-| `docs/` | Status, use case, risks, operations, measurement, deploy, skills and backends guides, design brief |
+| `schemas/` | The response contract as JSON Schema |
+| `docs/` | Status, architecture and data flows, use case, risks, operations, measurement, deploy, skills and backends guides, design brief |
 
 ## Tests
 

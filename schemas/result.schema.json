@@ -1,0 +1,99 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "result.schema.json",
+ "title": "Investigation result",
+ "description": "What POST /investigations and the agent runtime return. Everything except report.narrative and report.confidence is produced by code.",
+ "oneOf": [{"$ref": "#/$defs/ok"}, {"$ref": "#/$defs/denied"}],
+ "$defs": {
+  "denied": {
+   "type": "object",
+   "required": ["status", "reason", "message"],
+   "additionalProperties": false,
+   "properties": {
+    "status": {"const": "denied"},
+    "reason": {"enum": ["unauthenticated", "out_of_scope", "scope_empty", "ownership_unavailable", "ownership_stale",
+                        "bad_account", "bad_window", "window_out_of_range", "bad_route", "disabled"]},
+    "message": {"type": "string"}
+   }
+  },
+  "count": {"type": "object", "required": ["value", "count"], "properties": {"value": {"type": ["string", "integer"]}, "count": {"type": "integer", "minimum": 0}}},
+  "counts": {"type": "array", "items": {"$ref": "#/$defs/count"}},
+  "ok": {
+   "type": "object",
+   "required": ["status", "account", "facts", "candidates", "must_escalate", "report", "notes", "ms"],
+   "additionalProperties": false,
+   "properties": {
+    "status": {"const": "ok"},
+    "account": {"type": "string", "pattern": "^[a-z0-9._$-]{1,64}$"},
+    "must_escalate": {"type": "boolean", "description": "Decided by code. True even when report is null."},
+    "notes": {"type": "array", "items": {"type": "string"}},
+    "ms": {"type": "integer", "minimum": 0},
+    "candidates": {
+     "type": "object", "required": ["allowed", "must_escalate"], "additionalProperties": false,
+     "properties": {"allowed": {"type": "array", "items": {"type": "string"}, "minItems": 1}, "must_escalate": {"type": "boolean"}}
+    },
+    "report": {
+     "oneOf": [
+      {"type": "null", "description": "Summary withheld. The facts are still complete."},
+      {
+       "type": "object",
+       "required": ["classification_id", "title", "confidence", "evidence_refs", "narrative", "next_steps", "escalate"],
+       "additionalProperties": false,
+       "properties": {
+        "classification_id": {"type": "string"},
+        "title": {"type": "string"},
+        "confidence": {"enum": ["low", "medium", "high"]},
+        "evidence_refs": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "narrative": {"type": "string", "maxLength": 1500, "description": "Written by the model, shown only after validation."},
+        "next_steps": {"type": "array", "items": {"type": "string"}, "description": "Approved templates rendered by code."},
+        "escalate": {"type": "boolean"}
+       }
+      }
+     ]
+    },
+    "facts": {
+     "type": "object",
+     "required": ["account", "account_type", "signals", "window", "query_ids", "ad", "entra", "gaps"],
+     "additionalProperties": false,
+     "properties": {
+      "account": {"type": "string"},
+      "account_type": {"enum": ["person", "service", "privileged", "unknown"]},
+      "signals": {"type": "object", "additionalProperties": {"type": ["number", "boolean", "null"]}},
+      "window": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "string"}, "end": {"type": "string"}}},
+      "query_ids": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 3},
+      "gaps": {"type": "array", "items": {"type": "string"}},
+      "ad": {
+       "type": "object",
+       "required": ["total_failures", "first_seen", "last_seen", "by_source_host", "distinct_source_hosts", "top_source_share",
+                    "by_source_ip", "external_source_ips", "by_failure_code", "by_protocol", "by_logon_group", "busiest_hours_utc",
+                    "cadence", "lockout_count", "lockout_callers", "last_password_change", "after_password_change"],
+       "additionalProperties": false,
+       "properties": {
+        "total_failures": {"type": "integer", "minimum": 0},
+        "first_seen": {"type": ["string", "null"]}, "last_seen": {"type": ["string", "null"]},
+        "by_source_host": {"$ref": "#/$defs/counts"}, "by_source_ip": {"$ref": "#/$defs/counts"},
+        "by_failure_code": {"$ref": "#/$defs/counts"}, "by_protocol": {"$ref": "#/$defs/counts"},
+        "by_logon_group": {"$ref": "#/$defs/counts"}, "busiest_hours_utc": {"$ref": "#/$defs/counts"},
+        "lockout_callers": {"$ref": "#/$defs/counts"},
+        "distinct_source_hosts": {"type": "integer"}, "top_source_share": {"type": ["number", "null"]},
+        "external_source_ips": {"type": "array", "items": {"type": "string"}},
+        "cadence": {"type": ["object", "null"]}, "lockout_count": {"type": "integer"},
+        "last_password_change": {"type": ["string", "null"]}, "after_password_change": {"type": ["object", "null"]}
+       }
+      },
+      "entra": {
+       "type": "object",
+       "required": ["total_failures", "by_error_code", "by_client_app", "by_app", "by_source_ip"],
+       "additionalProperties": false,
+       "properties": {
+        "total_failures": {"type": "integer", "minimum": 0},
+        "by_error_code": {"$ref": "#/$defs/counts"}, "by_client_app": {"$ref": "#/$defs/counts"},
+        "by_app": {"$ref": "#/$defs/counts"}, "by_source_ip": {"$ref": "#/$defs/counts"}
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

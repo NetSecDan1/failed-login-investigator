@@ -31,6 +31,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Operations | Audit logging without sensitive content | Implemented and evidenced | `tests/test_operations.py`. Retention and access: **Needs owner confirmation** |
 | Operations | Metrics, alarms, limits, kill switch | Partially implemented | Code and template tested and linted. Alarms not deployed. Kill switch not exercised live |
 | Operations | Runbook, rollback, named ownership | Partially implemented | `docs/OPERATIONS.md`. Owners are placeholders |
+| Delivery | Architecture, data flows and interface contract documented | Implemented and evidenced | `docs/ARCHITECTURE.md`, `schemas/result.schema.json`, `tests/test_contract.py`. Not reviewed by an architecture owner |
 | Risk | Risk documentation | Partially implemented | `docs/RISKS.md`. Not reviewed by a risk owner |
 | Cost | Cost per successfully completed investigation | Partially implemented | `tools/cost_report.py`, `docs/MEASUREMENT.md`. No live usage data exists |
 | Value | Return on investment | Not implemented | Not yet measured. No baseline for the manual process |
