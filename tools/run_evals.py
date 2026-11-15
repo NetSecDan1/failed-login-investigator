@@ -60,7 +60,7 @@ def score(cases, call):
     return {"cases": len(rows), "passed": len(passed), "failed": len(answered) - len(passed), "withheld": len(rows) - len(answered),
             "pass_rate_of_all_cases": round(len(passed) / len(rows), 3) if rows else None,
             "escalation_correct": sum(r["escalation_correct"] for r in rows),
-            "missed_mandatory_escalations": sum(1 for r, c in zip(rows, cases) if c["must_escalate"] and not r["escalation_correct"]),
+            "missed_mandatory_escalations": sum(1 for r, c in zip(rows, cases, strict=True) if c["must_escalate"] and not r["escalation_correct"]),
             "validator_rejects": sum(r["validator_rejects"] for r in rows), "model_calls": sum(r["model_calls"] for r in rows),
             "tokens_in": sum(r["tokens_in"] for r in rows), "tokens_out": sum(r["tokens_out"] for r in rows),
             "tokens_per_passed_case": round(tokens / len(passed)) if passed and tokens else None, "rows": rows}
