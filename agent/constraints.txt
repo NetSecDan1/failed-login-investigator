@@ -1,0 +1,5 @@
+# Patched versions of indirect dependencies, applied when the agent image is built.
+# Each line exists because the image vulnerability scan flagged the version that would otherwise be installed.
+urllib3==2.8.0
+msgpack==1.2.4
+setuptools==78.1.1

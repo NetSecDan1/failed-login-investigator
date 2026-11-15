@@ -3,8 +3,11 @@
 FROM public.ecr.aws/docker/library/python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
-COPY agent/requirements.txt agent/requirements.txt
-RUN pip install --no-cache-dir -r agent/requirements.txt
+# Take the base image's pending security fixes, then install pinned dependencies under patched constraints.
+RUN apt-get update && apt-get -y upgrade && rm -rf /var/lib/apt/lists/*
+COPY agent/requirements.txt agent/constraints.txt agent/
+RUN pip install --no-cache-dir -c agent/constraints.txt -r agent/requirements.txt \
+    && pip install --no-cache-dir -c agent/constraints.txt --upgrade setuptools
 COPY src/ src/
 COPY queries/ queries/
 COPY config/ config/
