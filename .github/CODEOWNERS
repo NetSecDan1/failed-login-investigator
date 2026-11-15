@@ -1,0 +1,7 @@
+# Changes to what the model may say or do, and to who may see what, need the owner's review.
+*                 @NetSecDan1
+/skills/          @NetSecDan1
+/src/scope.py     @NetSecDan1
+/src/validator.py @NetSecDan1
+/template.yaml    @NetSecDan1
+/infra/           @NetSecDan1

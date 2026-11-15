@@ -24,6 +24,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Data | Evidence from real log sources | Partially implemented | `src/backends.py`, `tests/test_backends.py`. Fake transport only |
 | Delivery | Automated tests for authorization, invalid input, failure paths, leakage, output validation | Implemented and evidenced | Offline test suite, 85% coverage floor enforced in CI |
 | Delivery | Build, lint, static security analysis, dependency audit, secret scan, infrastructure lint, checksummed artifact | Implemented and evidenced | `.github/workflows/ci.yml` |
+| Delivery | Review rules, change template, security policy, dependency update proposals | Implemented and evidenced | `.github/CODEOWNERS`, `.github/pull_request_template.md`, `SECURITY.md`, `.github/dependabot.yml`. Branch protection is not enabled, and workflow actions are pinned by tag, not by commit |
 | Delivery | An adopting organization's required scanners, attestations and release gates | Needs owner confirmation | Not wired in. The CI jobs are stand-ins to be mapped to the required tools |
 | Evaluation | Golden inputs and answers | Partially implemented | 15 synthetic cases, scored in CI with a scripted stand-in model (`tools/run_evals.py`). **No live model evaluation has been run** |
 | Evaluation | Adversarial evaluation of model behavior | Partially implemented | `tools/redteam.py`: 21 scripted hostile models, all contained, run in CI. Shows the controls hold, not how a real model behaves |
