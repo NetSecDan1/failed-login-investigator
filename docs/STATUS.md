@@ -25,8 +25,8 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Delivery | Automated tests for authorization, invalid input, failure paths, leakage, output validation | Implemented and evidenced | Offline test suite, 85% coverage floor enforced in CI |
 | Delivery | Build, lint, static security analysis, dependency audit, secret scan, infrastructure lint, checksummed artifact | Implemented and evidenced | `.github/workflows/ci.yml` |
 | Delivery | An adopting organization's required scanners, attestations and release gates | Needs owner confirmation | Not wired in. The CI jobs are stand-ins to be mapped to the required tools |
-| Evaluation | Golden inputs and answers | Partially implemented | 15 synthetic cases. Code offers the expected skill first in all 15. **No live model evaluation has been run** |
-| Evaluation | Adversarial evaluation of model behavior | Partially implemented | Offline tests with scripted hostile models and hostile log text. Not run against a live model |
+| Evaluation | Golden inputs and answers | Partially implemented | 15 synthetic cases, scored in CI with a scripted stand-in model (`tools/run_evals.py`). **No live model evaluation has been run** |
+| Evaluation | Adversarial evaluation of model behavior | Partially implemented | `tools/redteam.py`: 21 scripted hostile models, all contained, run in CI. Shows the controls hold, not how a real model behaves |
 | Evaluation | Business-impact testing and ongoing evaluation | Not implemented | Needs a pilot and a baseline |
 | Operations | Audit logging without sensitive content | Implemented and evidenced | `tests/test_operations.py`. Retention and access: **Needs owner confirmation** |
 | Operations | Metrics, alarms, limits, kill switch | Partially implemented | Code and template tested and linted. Alarms not deployed. Kill switch not exercised live |

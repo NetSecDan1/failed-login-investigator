@@ -40,4 +40,4 @@ jobs:
         run: ./run_tests.sh
       - name: Live skill evaluation
         continue-on-error: true
-        run: python tools/run_evals.py
+        run: python tools/run_evals.py --target function --min-pass-rate 0.9

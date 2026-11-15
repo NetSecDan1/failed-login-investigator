@@ -83,10 +83,17 @@ signals never make a skill eligible, and the index is current.
 
 ## Evaluating
 
-- **Matcher, offline:** `python -m pytest -q tests/test_skills.py`. Checks that code offers the expected skill first for each case.
-- **Model, live:** `python tools/run_evals.py` invokes the deployed function for each case and scores the model's
-  choice. This has not been run yet in this repo because the test account has no Anthropic model access.
-  Until it has, treat the model-facing wording of the skills as unproven.
+| Command | What it measures | Needs |
+|---------|------------------|-------|
+| `python -m pytest -q tests/test_skills.py` | Code offers the expected skill first for each golden case | nothing |
+| `python tools/run_evals.py` | The whole pipeline on the 15 golden cases with a scripted stand-in model. Code path only | nothing |
+| `python tools/redteam.py` | 21 scripted hostile models, each of which code must contain | nothing |
+| `MODEL_ID=... python tools/run_evals.py --model live` | A real model's choices, rejects and tokens per passed case, through `MODEL_ROUTE` | model access |
+| `python tools/run_evals.py --target function` | The same against a deployed function | a deployment |
+
+The first three run in CI on every push and their scorecards are kept as build artifacts. **No live run exists
+yet.** Until one does, the model-facing wording of the skills is unproven, and the adversarial suite shows only
+that the controls hold, not how often a real model would test them.
 
 ## Using the library from other frameworks
 

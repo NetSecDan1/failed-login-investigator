@@ -16,6 +16,24 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python tools/build_skill_index.py --check
       - run: python -m pytest -q --cov=src --cov=agent --cov-report=term-missing tests
+  evaluation:
+    name: offline evaluation (golden cases and adversarial suite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - name: Golden cases with a scripted stand-in model (code path only)
+        run: python tools/run_evals.py --json golden-scorecard.json
+      - name: Adversarial suite with scripted hostile models
+        run: python tools/redteam.py | tee adversarial-scorecard.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-${{ github.sha }}
+          path: |
+            golden-scorecard.json
+            adversarial-scorecard.txt
+          retention-days: 30
   lint:
     name: lint (correctness rules)
     runs-on: ubuntu-latest
@@ -65,7 +83,7 @@ jobs:
       - run: cfn-lint template.yaml infra/github-oidc.yaml
   package:
     name: build artifact with checksums and dependency inventory
-    needs: [test, lint, static-security, dependencies, secrets, infrastructure]
+    needs: [test, evaluation, lint, static-security, dependencies, secrets, infrastructure]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

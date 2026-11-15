@@ -21,9 +21,15 @@ FORBIDDEN = [
         r"\b(disabl\w*|turn(ing|ed)? off|switch(ing|ed)? off|bypass\w*|circumvent\w*|work(ing)? around|exempt\w*|exclu\w+|"
         r"whitelist\w*|allow-?list\w*|remov\w+|relax\w*|loosen\w*|rais\w+)\b[^.]{0,60}"
         r"\b(mfa|multi-?factor|two-?factor|conditional access|access polic\w+|lockout|restriction\w*|monitoring|detection|guardrail\w*)", re.I)),
+    ("policy_bypass_advice", re.compile(
+        r"\b(mfa|multi-?factor|two-?factor|conditional access|access polic\w+|lockout( polic\w+)?|restriction\w*|monitoring|detection|guardrail\w*)\b"
+        r"[^.]{0,40}\b(be |been |get |gets |is |are )?(disabled|turned off|switched off|removed|bypassed|circumvented|excluded|exempt(ed)?|"
+        r"relaxed|loosened|whitelisted|allow-?listed)\b", re.I)),
     ("threshold_disclosure", re.compile(r"\b(lockout|lock-out)\s+(threshold|limit|count)|\battempts?\s+(before|until)\b[^.]{0,30}\block", re.I)),
     ("claims_action_taken", re.compile(r"\b(i|we)\s+(have|'ve|will|can|could|am going to)\s+\w*\s*(unlock\w*|reset\w*|re-?enabl\w*|chang\w+|fix\w*|block\w*)", re.I)),
     ("compromise_verdict", re.compile(r"\b(compromised|hacked|breach(ed)?|pwned|stolen)\b", re.I)),
+    ("prompt_artifacts", re.compile(r"\b(ignore|disregard)\b[^.]{0,20}\b(previous|prior|above)\b[^.]{0,20}\binstructions?\b|"
+                                    r"\b(admin|developer|debug) mode\b|\bsystem prompt\b|\bas an ai\b", re.I)),
     ("credential_request", re.compile(r"\b(send|share|tell|give|provide|enter|type|reply with|confirm)\b[^.]{0,30}\b(your|the)\s+(password|passcode|pin|mfa code|verification code)", re.I)),
 ]
 GENERIC = {"ntlmv1", "ntlmv2", "smbv1", "ipv4", "ipv6", "oauth2", "m365", "o365", "utf8", "sha256"}
