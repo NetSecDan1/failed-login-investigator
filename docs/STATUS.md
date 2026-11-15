@@ -22,6 +22,8 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Identity | Real-token authentication | Partially implemented | Authorizer configuration in `template.yaml`, in-application verification in `agent/identity.py`, tested with locally generated keys. No real identity provider token has been used |
 | Identity | Live ownership enforcement | Partially implemented | CSV import, freshness check, most-restrictive conflict rule (`tests/test_operations.py`, `tests/test_import_ownership.py`). No live ownership source |
 | Data | Evidence from real log sources | Partially implemented | `src/backends.py`, `tests/test_backends.py`. Fake transport only |
+| Data | Silent or partial log collection is detected | Partially implemented | Source activity count and expected reporting hosts (`tests/test_backends.py`). Fake transport only. The aggregate queries have not run against a live source |
+| Authority | Narrative cannot carry invented numbers, times, dates or unsafe advice | Implemented and evidenced | `tests/test_narrative_gate.py`, `tools/redteam.py`. Scripted models only. The unsafe-advice list is pattern based |
 | Delivery | Automated tests for authorization, invalid input, failure paths, leakage, output validation | Implemented and evidenced | Offline test suite, 85% coverage floor enforced in CI |
 | Delivery | Build, lint, static security analysis, dependency audit, secret scan, infrastructure lint, checksummed artifact | Implemented and evidenced | `.github/workflows/ci.yml` |
 | Delivery | Review rules, change template, security policy, dependency update proposals | Implemented and evidenced | `.github/CODEOWNERS`, `.github/pull_request_template.md`, `SECURITY.md`, `.github/dependabot.yml`. Branch protection is not enabled, and workflow actions are pinned by tag, not by commit |
@@ -60,8 +62,10 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 
 ## Tests run for this revision
 
-`python -m pytest -q --cov=src --cov=agent tests`, `ruff check .`, `bandit -r src agent`, `pip-audit -r agent/requirements.txt`,
-`cfn-lint template.yaml infra/github-oidc.yaml`. All offline. See the CI run for the commit.
+`python -m pytest -q --cov=src --cov=agent tests` (212 tests, 93% coverage), `python tools/run_evals.py` (15 of 15
+golden cases, scripted stand-in model), `python tools/redteam.py` (21 of 21 attacks contained), `ruff check .`,
+`bandit -r src agent`, `pip-audit -r agent/requirements.txt`, `cfn-lint template.yaml infra/github-oidc.yaml`.
+All offline. See the CI run for the commit.
 
 ## Next smallest useful steps
 
