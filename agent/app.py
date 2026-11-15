@@ -49,6 +49,8 @@ def make_router_model():
     route = os.environ.get("MODEL_ROUTE", "bedrock").lower()
     model_id = os.environ.get("ROUTER_MODEL_ID") or os.environ["MODEL_ID"]
     if route == "gateway":
+        if not os.environ.get("MODEL_GATEWAY_URL", "").lower().startswith("https://"):
+            raise ValueError("model gateway URL must use https")
         import backends
         from strands.models.openai import OpenAIModel
         return OpenAIModel(client_args={"base_url": os.environ["MODEL_GATEWAY_URL"],

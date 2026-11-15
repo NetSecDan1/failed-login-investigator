@@ -152,3 +152,16 @@ def test_bad_tokens_are_refused(keys, jwt_env, case):
 def test_runtime_app_builds():
     pytest.importorskip("bedrock_agentcore")
     assert app.build_app() is not None
+
+
+def test_gateway_routing_model_is_built_from_settings_and_requires_https(monkeypatch):
+    pytest.importorskip("openai")
+    from agent import app
+    monkeypatch.setenv("MODEL_ROUTE", "gateway"); monkeypatch.setenv("MODEL_ID", "m"); monkeypatch.setenv("ROUTER_MODEL_ID", "small")
+    monkeypatch.setenv("MODEL_GATEWAY_URL", "https://g.example.test/v1"); monkeypatch.setenv("MODEL_GATEWAY_TOKEN", "x")
+    model = app.make_router_model()
+    assert type(model).__name__ == "OpenAIModel" and model.get_config()["model_id"] == "small"
+    assert model.get_config()["params"] == {"max_tokens": 200, "temperature": 0}
+    monkeypatch.setenv("MODEL_GATEWAY_URL", "http://g.example.test/v1")
+    with pytest.raises(ValueError):
+        app.make_router_model()

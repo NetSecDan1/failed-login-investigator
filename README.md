@@ -114,8 +114,9 @@ OpenAI-compatible API. Which combination an organization permits is an owner dec
 
 ## Delivery gates
 
-Every push runs unit tests with a coverage floor, lint, static security analysis, a dependency audit, a secret
-scan over full history, infrastructure lint, and builds a checksummed artifact. These are stand-ins for whatever
+Every push runs unit and property tests with a coverage floor, the golden cases and the adversarial suite, lint,
+static security analysis, a dependency audit, a secret scan over full history, infrastructure lint, a container
+build with a smoke test, and builds a checksummed artifact with a software bill of materials. These are stand-ins for whatever
 scanners and attestations an adopting organization requires.
 
 ## Operating it

@@ -81,9 +81,38 @@ jobs:
         with: {python-version: "3.13"}
       - run: pip install cfn-lint==1.60.1
       - run: cfn-lint template.yaml infra/github-oidc.yaml
+  container:
+    name: agent container build, smoke test and vulnerability report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the agent image
+        run: docker build -f agent/Dockerfile -t fli-agent:ci .
+      - name: Image runs as a non-root user
+        run: test "$(docker run --rm fli-agent:ci id -u)" = "10001"
+      - name: Application starts and refuses a request with no verified identity
+        run: |
+          docker run --rm fli-agent:ci python -c "
+          from agent.app import build_app, run
+          build_app()
+          out = run({'action': 'investigate', 'account': 'svc-batch01', 'claims': {'employee_id': 'E1001'}}, {})
+          assert out['status'] == 'denied' and out['reason'] == 'unauthenticated', out
+          print('refused as expected:', out['reason'])"
+      - name: Vulnerability report (report only, does not block yet)
+        continue-on-error: true
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/aquasecurity/trivy:latest \
+            image --severity HIGH,CRITICAL --ignore-unfixed --no-progress fli-agent:ci | tee image-vulnerabilities.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: image-vulnerabilities-${{ github.sha }}
+          path: image-vulnerabilities.txt
+          if-no-files-found: ignore
+          retention-days: 30
   package:
-    name: build artifact with checksums and dependency inventory
-    needs: [test, evaluation, lint, static-security, dependencies, secrets, infrastructure]
+    name: build artifact with checksums and a software bill of materials
+    needs: [test, evaluation, lint, static-security, dependencies, secrets, infrastructure, container]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -93,8 +122,11 @@ jobs:
         run: |
           (cd src && zip -qr ../function.zip . -x '__pycache__/*') && zip -qr function.zip queries config
           tar -czf skills.tar.gz skills
-          pip install -q -r agent/requirements.txt && pip freeze > agent-dependency-inventory.txt
-          sha256sum function.zip skills.tar.gz agent-dependency-inventory.txt > SHA256SUMS
+          python -m venv .sbom && .sbom/bin/pip install -q -r agent/requirements.txt
+          .sbom/bin/pip freeze > agent-dependency-inventory.txt
+          pip install -q cyclonedx-bom==8.0.1
+          cyclonedx-py environment .sbom --output-format JSON --output-file agent-sbom.cdx.json
+          sha256sum function.zip skills.tar.gz agent-dependency-inventory.txt agent-sbom.cdx.json > SHA256SUMS
           echo "commit ${GITHUB_SHA}" >> SHA256SUMS
           cat SHA256SUMS
       - uses: actions/upload-artifact@v4
@@ -104,5 +136,6 @@ jobs:
             function.zip
             skills.tar.gz
             agent-dependency-inventory.txt
+            agent-sbom.cdx.json
             SHA256SUMS
           retention-days: 30
