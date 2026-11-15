@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""Configuration preflight. Checks a set of settings against what a real deployment needs.
+
+  python tools/preflight.py                       # check the current environment
+  python tools/preflight.py --env-file prod.env   # check KEY=VALUE lines in a file
+  python tools/preflight.py --runtime agent       # also require the agent runtime identity settings
+  python tools/preflight.py --write-docs          # regenerate docs/CONFIGURATION.md from config/settings.json
+
+Exit code 1 when any BLOCK finding exists. Passing this proves the settings are coherent and not left on
+prototype defaults. It does not prove the deployment works, is approved, or has been tested live.
+"""
+import argparse, json, os, re, sys
+
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+REGISTRY = os.path.join(ROOT, "config", "settings.json")
+IDENT = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,127}$")
+
+
+def registry():
+    return json.load(open(REGISTRY))["settings"]
+
+
+def check(env, runtime="function"):
+    """Return a list of (level, setting, message). level is BLOCK or WARN."""
+    reg = {s["name"]: s for s in registry()}
+    get = lambda n: (env.get(n) if env.get(n) not in (None, "") else reg[n]["default"])
+    out = []
+    block = lambda n, m: out.append(("BLOCK", n, m))
+    warn = lambda n, m: out.append(("WARN", n, m))
+
+    def number(n, minimum):
+        try:
+            v = float(get(n))
+        except ValueError:
+            block(n, "is not a number")
+            return None
+        if v < minimum:
+            return None
+        return v
+
+    for n in ("DATA_BUCKET", "MODEL_ID"):
+        if not get(n):
+            block(n, "is required")
+    if get("ALLOW_TEST_CLAIMS").lower() != "false":
+        block("ALLOW_TEST_CLAIMS", "must be false: it lets a request choose its own caller")
+    if get("AGENT_ENABLED").lower() != "true":
+        warn("AGENT_ENABLED", "the kill switch is off, every request will be refused")
+    if number("OWNERSHIP_MAX_AGE_HOURS", 0.01) is None:
+        block("OWNERSHIP_MAX_AGE_HOURS", "must be above 0 so stale ownership data is refused")
+    if number("RATE_LIMIT_PER_HOUR", 1) is None:
+        block("RATE_LIMIT_PER_HOUR", "must be above 0")
+    elif not get("RATE_LIMIT_TABLE"):
+        block("RATE_LIMIT_TABLE", "is required with a rate limit, otherwise each instance counts alone")
+    if get("SOURCE_HEALTH_CHECK").lower() != "true":
+        block("SOURCE_HEALTH_CHECK", "must be true so a silent source is not read as a clean account")
+    if number("EXPECTED_REPORTING_HOSTS", 1) is None:
+        warn("EXPECTED_REPORTING_HOSTS", "is 0, partial collection from domain controllers will not be noticed")
+    for n in ("SPLUNK_TOKEN", "DATABRICKS_TOKEN", "MODEL_GATEWAY_TOKEN"):
+        if env.get(n):
+            block(n, "a plain token is set: use the secret reference instead")
+    for n in ("SPLUNK_BASE_URL", "DATABRICKS_HOST", "MODEL_GATEWAY_URL", "JWT_JWKS_URL"):
+        if get(n) and not get(n).lower().startswith("https://"):
+            block(n, "must use https")
+
+    backend = get("EVIDENCE_BACKEND").lower()
+    need = {"splunk": ["SPLUNK_BASE_URL", "SPLUNK_INDEX_WINDOWS", "SPLUNK_INDEX_ENTRA", "SPLUNK_TOKEN_SECRET_ARN"],
+            "databricks": ["DATABRICKS_HOST", "DATABRICKS_WAREHOUSE_ID", "DATABRICKS_VIEW_FAILED_LOGINS",
+                           "DATABRICKS_VIEW_ACCOUNT_EVENTS", "DATABRICKS_VIEW_ENTRA_FAILURES", "DATABRICKS_TOKEN_SECRET_ARN"]}
+    if backend == "file":
+        block("EVIDENCE_BACKEND", "is file, which is synthetic data")
+    elif backend not in need:
+        block("EVIDENCE_BACKEND", "is not one of file, splunk, databricks")
+    else:
+        for n in need[backend]:
+            if not get(n):
+                block(n, "is required for the %s backend" % backend)
+            elif (n.startswith("SPLUNK_INDEX") or "_VIEW_" in n) and not IDENT.fullmatch(get(n)):
+                block(n, "must be a plain identifier")
+
+    route = get("MODEL_ROUTE").lower()
+    if route == "gateway":
+        for n in ("MODEL_GATEWAY_URL", "MODEL_GATEWAY_TOKEN_SECRET_ARN"):
+            if not get(n):
+                block(n, "is required for the gateway route")
+    elif route == "bedrock":
+        if not get("GUARDRAIL_ID"):
+            warn("GUARDRAIL_ID", "no guardrail on the direct model route")
+        elif get("GUARDRAIL_VERSION") == "DRAFT":
+            warn("GUARDRAIL_VERSION", "is DRAFT: pin a numbered version so behavior cannot change underneath you")
+    else:
+        block("MODEL_ROUTE", "is not one of bedrock, gateway")
+    for n, lo, hi in (("MODEL_MAX_OUTPUT_TOKENS", 200, 4000), ("MODEL_TIMEOUT_SECONDS", 5, 120), ("MODEL_MAX_ATTEMPTS", 1, 3)):
+        v = number(n, lo)
+        if v is None or v > hi:
+            block(n, "must be between %d and %d" % (lo, hi))
+    if get("METRICS_EMF").lower() != "true":
+        warn("METRICS_EMF", "metrics are off, alarms and cost reports will have nothing to read")
+    if runtime == "agent":
+        for n in ("JWT_ISSUER", "JWT_AUDIENCE", "JWT_JWKS_URL"):
+            if not get(n):
+                block(n, "is required for the agent runtime: without it no caller can be verified")
+    unknown = sorted(k for k in env if k not in reg and re.match(r"^(MODEL|SPLUNK|DATABRICKS|JWT|RATE|OWNERSHIP|AGENT|EVIDENCE|GUARDRAIL)_", k))
+    for k in unknown:
+        warn(k, "is not a setting this code reads. Check for a typo")
+    return out
+
+
+def docs():
+    lines = ["# Configuration", "",
+             "Generated from `config/settings.json` by `python tools/preflight.py --write-docs`. Do not edit by hand.",
+             "`tests/test_config.py` fails when the code reads a setting that is not listed here.", "",
+             "Run `python tools/preflight.py` against a planned environment before deploying. It blocks on prototype",
+             "defaults. Passing it does not mean the deployment is approved or has been tested live.", "",
+             "| Setting | Default | Purpose | For a real deployment |", "|---------|---------|---------|-----------------------|"]
+    for s in registry():
+        lines.append("| `%s` | %s | %s | %s |" % (s["name"], ("`%s`" % s["default"]) if s["default"] else "empty", s["purpose"], s["production"] or ""))
+    return "\n".join(lines) + "\n"
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--env-file")
+    ap.add_argument("--runtime", choices=["function", "agent"], default="function")
+    ap.add_argument("--write-docs", action="store_true")
+    a = ap.parse_args(argv)
+    if a.write_docs:
+        with open(os.path.join(ROOT, "docs", "CONFIGURATION.md"), "w") as f:
+            f.write(docs())
+        print("wrote docs/CONFIGURATION.md")
+        return 0
+    env = dict(os.environ)
+    if a.env_file:
+        env = {}
+        for line in open(a.env_file):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"')
+    findings = check(env, a.runtime)
+    for level, name, msg in findings:
+        print("%-5s %-32s %s" % (level, name, msg))
+    blocks = sum(1 for f in findings if f[0] == "BLOCK")
+    print("\n%d blocking, %d warnings" % (blocks, len(findings) - blocks))
+    return 1 if blocks else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

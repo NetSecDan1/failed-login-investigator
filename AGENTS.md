@@ -39,6 +39,7 @@ this repository. `docs/STATUS.md` is the record of what is and is not evidenced.
   security analysis, dependency audit, secret scan, infrastructure lint, and a checksummed build artifact.
 - Add tests for authorization boundaries, invalid input, failure paths, leakage and output validation. Add a
   golden case for every skill and adversarial cases for model behavior.
+- A new setting goes in `config/settings.json` with its production rule, then `python tools/preflight.py --write-docs`.
 - A new control gets a new attack in `tools/redteam.py`. The suite must report every attack contained.
 - Results must match `schemas/result.schema.json`. Change the schema and `docs/ARCHITECTURE.md` together with the code.
 - Say exactly what was exercised. A fake client or scripted model is not live validation, and must never be

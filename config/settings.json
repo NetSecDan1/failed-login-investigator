@@ -1,0 +1,239 @@
+{
+ "_comment": "Every setting the code reads. tests/test_config.py fails if code and this file disagree. docs/CONFIGURATION.md is generated from it.",
+ "settings": [
+  {
+   "name": "DATA_BUCKET",
+   "default": "",
+   "purpose": "Bucket holding skills, and the ownership file and synthetic evidence when those backends are in use.",
+   "production": "required"
+  },
+  {
+   "name": "AGENT_ENABLED",
+   "default": "true",
+   "purpose": "Operator kill switch. Anything but true refuses every request before identity, data or model.",
+   "production": null
+  },
+  {
+   "name": "ALLOW_TEST_CLAIMS",
+   "default": "false",
+   "purpose": "Accept the caller from the request body. Development only.",
+   "production": "must be false"
+  },
+  {
+   "name": "CALLER_CLAIM",
+   "default": "employee_id",
+   "purpose": "Token claim that identifies the caller. Must be the key used by the ownership source.",
+   "production": null
+  },
+  {
+   "name": "JWT_ISSUER",
+   "default": "",
+   "purpose": "Agent runtime: token issuer to verify against.",
+   "production": "required for the agent runtime"
+  },
+  {
+   "name": "JWT_AUDIENCE",
+   "default": "",
+   "purpose": "Agent runtime: audience the token must carry.",
+   "production": "required for the agent runtime"
+  },
+  {
+   "name": "JWT_JWKS_URL",
+   "default": "",
+   "purpose": "Agent runtime: signing keys location. https only.",
+   "production": "required for the agent runtime"
+  },
+  {
+   "name": "OWNERSHIP_MAX_AGE_HOURS",
+   "default": "0",
+   "purpose": "Refuse requests when ownership data is older than this. 0 is off.",
+   "production": "must be above 0"
+  },
+  {
+   "name": "RATE_LIMIT_PER_HOUR",
+   "default": "0",
+   "purpose": "Investigations allowed per caller per clock hour. 0 is off.",
+   "production": "must be above 0"
+  },
+  {
+   "name": "RATE_LIMIT_TABLE",
+   "default": "",
+   "purpose": "Counter table shared by all instances. Empty keeps the count in one process.",
+   "production": "required when the limit is on"
+  },
+  {
+   "name": "EVIDENCE_BACKEND",
+   "default": "file",
+   "purpose": "file (synthetic), splunk or databricks.",
+   "production": "must not be file"
+  },
+  {
+   "name": "SOURCE_HEALTH_CHECK",
+   "default": "true",
+   "purpose": "Ask each source for an activity count so a silent source is not read as a clean account.",
+   "production": "must be true"
+  },
+  {
+   "name": "EXPECTED_REPORTING_HOSTS",
+   "default": "0",
+   "purpose": "Domain controllers expected to report. 0 skips the comparison.",
+   "production": "should be above 0"
+  },
+  {
+   "name": "FIELD_MAP_PATH",
+   "default": "",
+   "purpose": "Path to a field map other than config/field_map.json.",
+   "production": null
+  },
+  {
+   "name": "QUERY_TEMPLATE_DIR",
+   "default": "",
+   "purpose": "Path to query templates other than queries/.",
+   "production": null
+  },
+  {
+   "name": "SPLUNK_BASE_URL",
+   "default": "",
+   "purpose": "Splunk management endpoint. https only.",
+   "production": null
+  },
+  {
+   "name": "SPLUNK_INDEX_WINDOWS",
+   "default": "",
+   "purpose": "Index holding directory logon events. Plain identifier.",
+   "production": null
+  },
+  {
+   "name": "SPLUNK_INDEX_ENTRA",
+   "default": "",
+   "purpose": "Index holding cloud sign-in events. Plain identifier.",
+   "production": null
+  },
+  {
+   "name": "SPLUNK_TOKEN_SECRET_ARN",
+   "default": "",
+   "purpose": "Secret holding the read-only Splunk token.",
+   "production": null
+  },
+  {
+   "name": "SPLUNK_TOKEN",
+   "default": "",
+   "purpose": "Plain token. Local runs only.",
+   "production": "must be empty"
+  },
+  {
+   "name": "DATABRICKS_HOST",
+   "default": "",
+   "purpose": "Workspace URL. https only.",
+   "production": null
+  },
+  {
+   "name": "DATABRICKS_WAREHOUSE_ID",
+   "default": "",
+   "purpose": "SQL warehouse to run statements on.",
+   "production": null
+  },
+  {
+   "name": "DATABRICKS_VIEW_FAILED_LOGINS",
+   "default": "",
+   "purpose": "Three-part view name.",
+   "production": null
+  },
+  {
+   "name": "DATABRICKS_VIEW_ACCOUNT_EVENTS",
+   "default": "",
+   "purpose": "Three-part view name.",
+   "production": null
+  },
+  {
+   "name": "DATABRICKS_VIEW_ENTRA_FAILURES",
+   "default": "",
+   "purpose": "Three-part view name.",
+   "production": null
+  },
+  {
+   "name": "DATABRICKS_TOKEN_SECRET_ARN",
+   "default": "",
+   "purpose": "Secret holding the read-only Databricks token.",
+   "production": null
+  },
+  {
+   "name": "DATABRICKS_TOKEN",
+   "default": "",
+   "purpose": "Plain token. Local runs only.",
+   "production": "must be empty"
+  },
+  {
+   "name": "MODEL_ROUTE",
+   "default": "bedrock",
+   "purpose": "bedrock for a direct call, gateway for a central OpenAI-compatible model gateway.",
+   "production": "owner decision"
+  },
+  {
+   "name": "MODEL_ID",
+   "default": "",
+   "purpose": "Model or inference profile used for the explanation.",
+   "production": "required"
+  },
+  {
+   "name": "ROUTER_MODEL_ID",
+   "default": "",
+   "purpose": "Agent runtime: model used only to choose a tool. Defaults to MODEL_ID.",
+   "production": null
+  },
+  {
+   "name": "MODEL_GATEWAY_URL",
+   "default": "",
+   "purpose": "Gateway base URL. https only.",
+   "production": "required when the route is gateway"
+  },
+  {
+   "name": "MODEL_GATEWAY_TOKEN_SECRET_ARN",
+   "default": "",
+   "purpose": "Secret holding the gateway token.",
+   "production": null
+  },
+  {
+   "name": "MODEL_GATEWAY_TOKEN",
+   "default": "",
+   "purpose": "Plain token. Local runs only.",
+   "production": "must be empty"
+  },
+  {
+   "name": "MODEL_MAX_OUTPUT_TOKENS",
+   "default": "1200",
+   "purpose": "Output token ceiling per model call.",
+   "production": null
+  },
+  {
+   "name": "MODEL_TIMEOUT_SECONDS",
+   "default": "60",
+   "purpose": "Model call timeout.",
+   "production": null
+  },
+  {
+   "name": "MODEL_MAX_ATTEMPTS",
+   "default": "2",
+   "purpose": "Transport attempts for the direct route.",
+   "production": null
+  },
+  {
+   "name": "GUARDRAIL_ID",
+   "default": "",
+   "purpose": "Direct route: guardrail applied to the model call.",
+   "production": "should be set on the direct route"
+  },
+  {
+   "name": "GUARDRAIL_VERSION",
+   "default": "DRAFT",
+   "purpose": "Guardrail version.",
+   "production": "should be a numbered version"
+  },
+  {
+   "name": "METRICS_EMF",
+   "default": "false",
+   "purpose": "Write one embedded metric line per request.",
+   "production": "should be true"
+  }
+ ]
+}

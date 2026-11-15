@@ -1,0 +1,61 @@
+"""The settings registry, the code, the template and the docs must agree. Preflight must block prototype defaults."""
+import glob, importlib.util, os, re
+from conftest import ROOT
+
+spec = importlib.util.spec_from_file_location("preflight", os.path.join(ROOT, "tools", "preflight.py"))
+pre = importlib.util.module_from_spec(spec); spec.loader.exec_module(pre)
+NAMES = {s["name"] for s in pre.registry()}
+
+GOOD = {"DATA_BUCKET": "b", "MODEL_ID": "m", "ALLOW_TEST_CLAIMS": "false", "OWNERSHIP_MAX_AGE_HOURS": "26", "RATE_LIMIT_PER_HOUR": "30",
+        "RATE_LIMIT_TABLE": "t", "EVIDENCE_BACKEND": "splunk", "SPLUNK_BASE_URL": "https://s.example.test:8089",
+        "SPLUNK_INDEX_WINDOWS": "wineventlog", "SPLUNK_INDEX_ENTRA": "signin", "SPLUNK_TOKEN_SECRET_ARN": "arn:x",
+        "EXPECTED_REPORTING_HOSTS": "6", "MODEL_ROUTE": "gateway", "MODEL_GATEWAY_URL": "https://g.example.test/v1",
+        "MODEL_GATEWAY_TOKEN_SECRET_ARN": "arn:y", "METRICS_EMF": "true"}
+
+
+def blocks(env, runtime="function"):
+    return {name for level, name, _ in pre.check(env, runtime) if level == "BLOCK"}
+
+
+def test_every_setting_the_code_reads_is_registered():
+    used = set()
+    for path in glob.glob(os.path.join(ROOT, "src", "*.py")) + glob.glob(os.path.join(ROOT, "agent", "*.py")):
+        text = open(path).read()
+        used |= set(re.findall(r'environ(?:\.get)?[\[(]"([A-Z_]+)"', text))
+        for a, b in re.findall(r'secret_from_env\("([A-Z_]+)", "([A-Z_]+)"', text):
+            used |= {a, b}
+        used |= set(re.findall(r'"((?:SPLUNK_INDEX|DATABRICKS_VIEW)_[A-Z_]+)"', text))
+    assert used - NAMES == set(), "settings read by code but missing from config/settings.json"
+    assert NAMES - used == set(), "settings registered but never read"
+
+
+def test_every_function_setting_in_the_template_is_registered():
+    env = set(re.findall(r"^          ([A-Z_]+):", open(os.path.join(ROOT, "template.yaml")).read(), re.M))
+    assert env - NAMES == set()
+
+
+def test_docs_are_generated_and_current():
+    assert open(os.path.join(ROOT, "docs", "CONFIGURATION.md")).read() == pre.docs()
+
+
+def test_prototype_defaults_are_blocked():
+    b = blocks({"DATA_BUCKET": "b", "MODEL_ID": "m", "ALLOW_TEST_CLAIMS": "true"})
+    assert {"ALLOW_TEST_CLAIMS", "OWNERSHIP_MAX_AGE_HOURS", "RATE_LIMIT_PER_HOUR", "EVIDENCE_BACKEND"} <= b
+
+
+def test_a_coherent_environment_passes_and_each_mistake_is_caught():
+    assert blocks(GOOD) == set()
+    assert blocks(GOOD, "agent") == {"JWT_ISSUER", "JWT_AUDIENCE", "JWT_JWKS_URL"}
+    for change, name in [({"SPLUNK_TOKEN": "abc"}, "SPLUNK_TOKEN"), ({"SPLUNK_BASE_URL": "http://s"}, "SPLUNK_BASE_URL"),
+                         ({"SPLUNK_INDEX_WINDOWS": "main | delete"}, "SPLUNK_INDEX_WINDOWS"), ({"RATE_LIMIT_TABLE": ""}, "RATE_LIMIT_TABLE"),
+                         ({"MODEL_GATEWAY_URL": ""}, "MODEL_GATEWAY_URL"), ({"MODEL_ROUTE": "direct"}, "MODEL_ROUTE"),
+                         ({"MODEL_MAX_OUTPUT_TOKENS": "999999"}, "MODEL_MAX_OUTPUT_TOKENS"), ({"SOURCE_HEALTH_CHECK": "false"}, "SOURCE_HEALTH_CHECK"),
+                         ({"EVIDENCE_BACKEND": "databricks"}, "DATABRICKS_HOST"), ({"OWNERSHIP_MAX_AGE_HOURS": "soon"}, "OWNERSHIP_MAX_AGE_HOURS")]:
+        assert name in blocks(dict(GOOD, **change)), change
+
+
+def test_typos_are_warned(tmp_path, capsys):
+    f = tmp_path / "x.env"
+    f.write_text("\n".join("%s=%s" % kv for kv in dict(GOOD, MODEL_ROUT="gateway").items()))
+    assert pre.main(["--env-file", str(f)]) == 0
+    assert "MODEL_ROUT " in capsys.readouterr().out

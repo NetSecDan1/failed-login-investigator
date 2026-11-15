@@ -153,6 +153,18 @@ Status codes: 200 ok, 400 bad input, 401 no verified caller, 403 not yours or no
 
 Real evidence sources are covered in [`BACKENDS.md`](BACKENDS.md).
 
+## Before a real deployment: preflight
+
+```bash
+python tools/preflight.py --env-file planned.env            # function deployment
+python tools/preflight.py --env-file planned.env --runtime agent
+```
+
+It blocks on anything still at a prototype default: test claims allowed, synthetic evidence, no ownership
+freshness limit, no rate limit, plain tokens, non-https endpoints, missing identity settings. Every setting is
+listed in [`CONFIGURATION.md`](CONFIGURATION.md). Passing preflight means the settings are coherent. It does not
+mean the deployment is approved or has been tested live.
+
 ## Verify
 
 `./run_tests.sh` prints one line per case. Expected once model access works:
