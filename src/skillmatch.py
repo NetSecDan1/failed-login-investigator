@@ -33,9 +33,16 @@ def holds(cond, signals):
     value = signals.get(cond["signal"])
     if value is None:
         return False
-    if isinstance(value, bool) != isinstance(cond["value"], bool):
+    want = cond["value"]
+    if isinstance(value, bool) or isinstance(want, bool):
+        if not (isinstance(value, bool) and isinstance(want, bool)):
+            return False
+    elif isinstance(want, (int, float)) != isinstance(value, (int, float)) or isinstance(want, str) != isinstance(value, str):
+        return False                                  # a signal of the wrong type never satisfies a rule
+    try:
+        return bool(OPS[cond["op"]](value, want))
+    except TypeError:
         return False
-    return OPS[cond["op"]](value, cond["value"])
 
 
 def signal_names(cond):
