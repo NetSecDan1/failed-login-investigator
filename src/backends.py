@@ -42,7 +42,10 @@ def to_utc_z(value):
         dt = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00").replace(" ", "T", 1))
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    dt = dt.astimezone(timezone.utc)
+    if not 2000 <= dt.year <= 2100:                   # a log time outside this century is corruption, not evidence
+        raise ValueError("implausible time")
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _clean_value(field, value):
@@ -76,7 +79,7 @@ def normalize(kind, raw_rows, field_map):
                 if name in raw and str(raw[name] if not isinstance(raw[name], list) else (raw[name] or [""])[0]).strip() not in skip:
                     try:
                         row[field] = _clean_value(field, raw[name])
-                    except (ValueError, OverflowError):
+                    except (ValueError, OverflowError, OSError, TypeError):   # absurd timestamps and the like
                         row[field] = None
                     break
         if not row.get("time"):

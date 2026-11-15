@@ -185,3 +185,10 @@ def test_databricks_health_uses_only_time_parameters():
     assert b.health(T0, T1)["windows"] == {"events": 4200, "reporting_hosts": 3}
     sent = json.loads(t.calls[0]["body"])
     assert [p["name"] for p in sent["parameters"]] == ["start", "end"] and "account" not in sent["statement"]
+
+
+def test_absurd_timestamps_are_dropped_not_fatal():
+    raw = [{"_time": 67768036191676796}, {"_time": -1e30}, {"_time": -30610224001}, {"_time": "0999-01-01T00:00:00Z"}, {"_time": "99999999999999999999"}, {"_time": ["x"]}, {"_time": {"a": 1}},
+           {"_time": "2026-11-12T09:00:00Z"}]
+    rows, dropped = backends.normalize("failed_logins", raw, FM)
+    assert [r["time"] for r in rows] == ["2026-11-12T09:00:00Z"] and dropped == 7
