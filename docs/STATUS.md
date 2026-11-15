@@ -33,6 +33,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Evaluation | Business-impact testing and ongoing evaluation | Not implemented | Needs a pilot and a baseline |
 | Operations | Audit logging without sensitive content | Implemented and evidenced | `tests/test_operations.py`. Retention and access: **Needs owner confirmation** |
 | Operations | Metrics, alarms, limits, kill switch | Partially implemented | Code and template tested and linted. Alarms not deployed. Kill switch not exercised live |
+| Operations | Per-caller rate limit, and a reference that ties each result to its audit line | Partially implemented | `src/ratelimit.py`, `tests/test_ratelimit.py`. Limit off by default. Shared counter table tested with a scripted client only |
 | Operations | Runbook, rollback, named ownership | Partially implemented | `docs/OPERATIONS.md`. Owners are placeholders |
 | Delivery | Architecture, data flows and interface contract documented | Implemented and evidenced | `docs/ARCHITECTURE.md`, `schemas/result.schema.json`, `tests/test_contract.py`. Not reviewed by an architecture owner |
 | Risk | Risk documentation | Partially implemented | `docs/RISKS.md`. Not reviewed by a risk owner |
@@ -62,7 +63,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 
 ## Tests run for this revision
 
-`python -m pytest -q --cov=src --cov=agent tests` (212 tests, 93% coverage), `python tools/run_evals.py` (15 of 15
+`python -m pytest -q --cov=src --cov=agent tests` (219 tests, 93% coverage), `python tools/run_evals.py` (15 of 15
 golden cases, scripted stand-in model), `python tools/redteam.py` (21 of 21 attacks contained), `ruff check .`,
 `bandit -r src agent`, `pip-audit -r agent/requirements.txt`, `cfn-lint template.yaml infra/github-oidc.yaml`.
 All offline. See the CI run for the commit.

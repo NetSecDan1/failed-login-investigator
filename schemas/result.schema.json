@@ -7,23 +7,26 @@
  "$defs": {
   "denied": {
    "type": "object",
-   "required": ["status", "reason", "message"],
+   "required": ["status", "reason", "message", "reference"],
    "additionalProperties": false,
    "properties": {
     "status": {"const": "denied"},
     "reason": {"enum": ["unauthenticated", "out_of_scope", "scope_empty", "ownership_unavailable", "ownership_stale",
-                        "bad_account", "bad_window", "window_out_of_range", "bad_route", "disabled"]},
-    "message": {"type": "string"}
+                        "bad_account", "bad_window", "window_out_of_range", "bad_route", "disabled", "rate_limited", "rate_limit_unavailable"]},
+    "message": {"type": "string"},
+    "reference": {"$ref": "#/$defs/reference"}
    }
   },
+  "reference": {"type": "string", "pattern": "^INV-[0-9]{8}-[0-9A-F]{8}$", "description": "Quote this to support or security operations. It matches one audit line."},
   "count": {"type": "object", "required": ["value", "count"], "properties": {"value": {"type": ["string", "integer"]}, "count": {"type": "integer", "minimum": 0}}},
   "counts": {"type": "array", "items": {"$ref": "#/$defs/count"}},
   "ok": {
    "type": "object",
-   "required": ["status", "account", "facts", "candidates", "must_escalate", "report", "notes", "ms"],
+   "required": ["status", "account", "facts", "candidates", "must_escalate", "report", "notes", "ms", "reference"],
    "additionalProperties": false,
    "properties": {
     "status": {"const": "ok"},
+    "reference": {"$ref": "#/$defs/reference"},
     "account": {"type": "string", "pattern": "^[a-z0-9._$-]{1,64}$"},
     "must_escalate": {"type": "boolean", "description": "Decided by code. True even when report is null."},
     "notes": {"type": "array", "items": {"type": "string"}},

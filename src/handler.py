@@ -7,7 +7,9 @@ Everything except explain() is deterministic code. No write path to any identity
 import hashlib, json, os, time
 from datetime import datetime, timedelta, timezone
 
-import scope, evidence, backends, findings, explain, validator, skillmatch
+import uuid
+
+import scope, evidence, backends, findings, explain, validator, skillmatch, ratelimit
 
 MAX_WINDOW_HOURS = 168
 
@@ -72,7 +74,7 @@ def _emit_metrics(rec):
 
 
 HTTP_STATUS = {"unauthenticated": 401, "out_of_scope": 403, "scope_empty": 403, "ownership_unavailable": 503,
-               "ownership_stale": 503, "disabled": 503}
+               "ownership_stale": 503, "disabled": 503, "rate_limited": 429, "rate_limit_unavailable": 503}
 
 
 def _respond(event, result):
@@ -84,15 +86,23 @@ def _respond(event, result):
             "body": json.dumps(result)}
 
 
+def new_reference():
+    """Short reference the caller can quote to support or security operations. Ties a result to its audit line."""
+    return "INV-%s-%s" % (datetime.now(timezone.utc).strftime("%Y%m%d"), uuid.uuid4().hex[:8].upper())
+
+
 def handler(event, context=None, store=None, model=None, backend=None):
-    return _respond(event, _run(event, context, store, model, backend))
+    reference = new_reference()
+    result = _run(event, context, store, model, backend, reference)
+    result["reference"] = reference
+    return _respond(event, result)
 
 
-def _run(event, context, store, model, backend):
+def _run(event, context, store, model, backend, reference):
     t0 = time.time()
     store = store or evidence.S3Store(os.environ["DATA_BUCKET"])
     route = event.get("routeKey") or event.get("action") or "POST /investigations"
-    audit = {"request_id": getattr(context, "aws_request_id", "local"), "outcome": "error", "route": route}
+    audit = {"request_id": getattr(context, "aws_request_id", "local"), "reference": reference, "outcome": "error", "route": route}
     try:
         if os.environ.get("AGENT_ENABLED", "true").lower() != "true":   # operator kill switch
             raise scope.Denied("disabled", "This service is switched off. Try again later.")
@@ -103,6 +113,8 @@ def _run(event, context, store, model, backend):
         claims = _claims(event)
         caller = scope.caller_id(claims, os.environ.get("CALLER_CLAIM", "employee_id"))
         audit["caller"] = caller
+        if route == "POST /investigations":
+            audit["rate"] = ratelimit.check(caller)       # counts every attempt, including ones denied below
 
         # 2. Scope from the ownership export (stands in for IIQ). Fails closed.
         scope_set, account_meta = scope.resolve_scope_meta(caller, store)

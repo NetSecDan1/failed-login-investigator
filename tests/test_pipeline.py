@@ -36,7 +36,8 @@ def test_non_owner_denied_before_any_read():
         def get(self, k): self.seen.append(k); return super().get(k)
     s = Spy(FILES)
     r = run(ev("E1001", "svc-payroll"), store=s)
-    assert r == {"status": "denied", "reason": "out_of_scope", "message": "You can only investigate accounts you own."}
+    ref = r.pop("reference")
+    assert ref.startswith("INV-") and r == {"status": "denied", "reason": "out_of_scope", "message": "You can only investigate accounts you own."}
     assert s.seen == ["ownership/ownership.json"] and CALLS == []
 
 def test_nonexistent_same_answer_as_unowned():

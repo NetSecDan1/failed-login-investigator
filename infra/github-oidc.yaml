@@ -42,6 +42,7 @@ Resources:
               - logs:PutLogEvents
               - kms:Decrypt
               - secretsmanager:GetSecretValue
+              - dynamodb:UpdateItem
               - ec2:CreateNetworkInterface
               - ec2:DescribeNetworkInterfaces
               - ec2:DeleteNetworkInterface
@@ -91,6 +92,10 @@ Resources:
                 Effect: Allow
                 Action: [bedrock:CreateGuardrail, bedrock:UpdateGuardrail, bedrock:DeleteGuardrail, bedrock:GetGuardrail, bedrock:ListGuardrails, bedrock:TagResource, bedrock:UntagResource, bedrock:ListTagsForResource]
                 Resource: "*"
+              - Sid: RateTable
+                Effect: Allow
+                Action: [dynamodb:CreateTable, dynamodb:DeleteTable, dynamodb:DescribeTable, dynamodb:UpdateTable, dynamodb:DescribeTimeToLive, dynamodb:UpdateTimeToLive, dynamodb:DescribeContinuousBackups, dynamodb:TagResource, dynamodb:UntagResource, dynamodb:ListTagsOfResource]
+                Resource: !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${StackPrefix}-*"
               - Sid: Logs
                 Effect: Allow
                 Action: [logs:CreateLogGroup, logs:DeleteLogGroup, logs:PutRetentionPolicy, logs:DeleteRetentionPolicy, logs:TagResource, logs:UntagResource, logs:ListTagsForResource, logs:FilterLogEvents, logs:GetLogEvents]

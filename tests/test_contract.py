@@ -24,7 +24,7 @@ def test_every_golden_case_matches_the_contract_with_and_without_a_summary(case)
 def test_denials_match_the_contract_and_carry_nothing_else(event):
     r = handler.handler(event, None, store=STORE, model=no_model)
     check(r)
-    assert set(r) == {"status", "reason", "message"}
+    assert set(r) == {"status", "reason", "message", "reference"}
 
 
 def test_schema_itself_is_valid_and_strict():

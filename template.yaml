@@ -25,6 +25,10 @@ Parameters:
     Type: Number
     Default: 0
     Description: Refuse requests when the ownership data is older than this. 0 turns the check off, which is only acceptable with synthetic data.
+  RateLimitPerHour:
+    Type: Number
+    Default: 0
+    Description: Investigations allowed per caller per clock hour. 0 turns the limit off. Above 0, a small counter table is created.
   ExpectedReportingHosts:
     Type: Number
     Default: 0
@@ -88,6 +92,7 @@ Conditions:
   HasApi: !Not [!Equals [!Ref JwtIssuer, ""]]
   HasSecret: !Not [!Equals [!Ref BackendTokenSecretArn, ""]]
   HasGatewaySecret: !Not [!Equals [!Ref ModelGatewayTokenSecretArn, ""]]
+  HasRateLimit: !Not [!Equals [!Ref RateLimitPerHour, 0]]
   HasAlarms: !Not [!Equals [!Ref AlarmTopicArn, ""]]
   HasBoundary: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
   InVpc: !Not [!Equals [!Join ["", !Ref VpcSubnetIds], ""]]
@@ -154,6 +159,13 @@ Resources:
                 Action: [logs:CreateLogStream, logs:PutLogEvents]
                 Resource: !Sub "${LogGroup.Arn}:*"
               - !If
+                - HasRateLimit
+                - Sid: CountOwnRateLimit
+                  Effect: Allow
+                  Action: dynamodb:UpdateItem
+                  Resource: !GetAtt RateTable.Arn
+                - !Ref AWS::NoValue
+              - !If
                 - HasSecret
                 - Sid: ReadBackendToken
                   Effect: Allow
@@ -184,12 +196,25 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - secretsmanager:GetSecretValue
+                  - dynamodb:UpdateItem
                   - ec2:CreateNetworkInterface
                   - ec2:DescribeNetworkInterfaces
                   - ec2:DeleteNetworkInterface
                   - ec2:AssignPrivateIpAddresses
                   - ec2:UnassignPrivateIpAddresses
                 Resource: "*"
+  # The only thing the service writes to: a caller identifier, an hour and a count, expiring after two hours.
+  RateTable:
+    Type: AWS::DynamoDB::Table
+    Condition: HasRateLimit
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: [{AttributeName: bucket, AttributeType: S}]
+      KeySchema: [{AttributeName: bucket, KeyType: HASH}]
+      TimeToLiveSpecification: {AttributeName: expires_at, Enabled: true}
+      SSESpecification: {SSEEnabled: true}
   LogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
@@ -223,6 +248,8 @@ Resources:
           MODEL_TIMEOUT_SECONDS: !Ref ModelTimeoutSeconds
           OWNERSHIP_MAX_AGE_HOURS: !Ref OwnershipMaxAgeHours
           EXPECTED_REPORTING_HOSTS: !Ref ExpectedReportingHosts
+          RATE_LIMIT_PER_HOUR: !Ref RateLimitPerHour
+          RATE_LIMIT_TABLE: !If [HasRateLimit, !Ref RateTable, ""]
           SOURCE_HEALTH_CHECK: "true"
           ALLOW_TEST_CLAIMS: !Ref AllowTestClaims
           CALLER_CLAIM: !Ref CallerClaim

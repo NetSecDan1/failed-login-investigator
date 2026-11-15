@@ -37,6 +37,7 @@ flowchart TD
 | Application to model | Findings, allowed skill choices, approved step lists | One route setting. Token, time and attempt limits. The model has no tools that fetch data |
 | Model to caller | A skill choice, a narrative, step numbers | Schema, allowed-choice, entity, number, time and unsafe-content checks. Steps and the escalation flag come from code |
 | Application to logs | Audit line and metric line | Identifiers and outcomes only. No raw rows, no narrative |
+| Application to its rate counter | Caller identifier, clock hour, a count | The only write the service makes. Entries expire after two hours. A counter that cannot be used refuses the request |
 
 ## Components and what each may do
 
@@ -79,3 +80,4 @@ The pipeline, skills, validator, tests and gates are shared. Choosing a shape is
 | Model unavailable, blocked or over its limits | Facts and escalation flag returned, no summary |
 | Model output fails validation twice | Facts and escalation flag returned, no summary |
 | Operator kill switch off | Every request denied before identity, data or model |
+| Caller over the hourly limit, or the counter unavailable | Denied, 429 or 503, nothing read |

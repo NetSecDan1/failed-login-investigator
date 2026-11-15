@@ -63,8 +63,14 @@ Thresholds are placeholders. Tune them once there is real traffic.
 | Rows per evidence query | 5000, 1000, 5000 | fixed in templates and code |
 | Routing prompt length, tool calls per turn | 2000 characters, 1 | fixed in `agent/app.py` |
 | API throttle | 2 requests a second, burst 5, global | `ApiRateLimit`, `ApiBurstLimit` |
+| Investigations per caller per hour | off | `RATE_LIMIT_PER_HOUR`, with `RATE_LIMIT_TABLE` for a counter shared by all instances |
 
-Not built: a per-caller rate limit and a daily spend cap.
+The per-caller limit counts every attempt, including ones that end in a denial, so probing for accounts spends
+the caller's own allowance. If the counter cannot be read or written the request is refused. Without a table the
+counter lives in one process, which is only adequate for local runs. Not built: a daily spend cap.
+
+Every result and every denial carries a reference such as `INV-20261112-3FA9C1D2`. The same value is in the audit
+line, so support and security operations can find the exact request an owner is asking about.
 
 ## Switching it off
 

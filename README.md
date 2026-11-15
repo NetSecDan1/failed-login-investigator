@@ -88,7 +88,7 @@ the evidence does not support, a model trying to talk down a mandatory escalatio
 
 ## Guardrails in one list
 
-- No write permissions anywhere. The role allows `s3:GetObject`, `bedrock:InvokeModel`, `bedrock:ApplyGuardrail` and its own log writes, with an explicit deny on everything else.
+- No write path to any identity or log system. The role allows `s3:GetObject`, `bedrock:InvokeModel`, `bedrock:ApplyGuardrail` and its own log writes, with an explicit deny on everything else. With the per-caller rate limit on, it may also update one counter table of its own.
 - Scope is resolved per request from the ownership source and re-checked inside every read tool.
 - Unowned and nonexistent accounts get the same answer, so the agent is not an existence oracle.
 - Read tools take `(account, start, end)` only. No free-text queries.
@@ -125,8 +125,8 @@ no return on investment is claimed yet. [`docs/RISKS.md`](docs/RISKS.md) is the 
 
 ## Known limits
 
-- Not 100% safe, and nothing is. What is guaranteed by construction is no write path and no out-of-scope read. Wrong explanations and stale ownership data remain possible.
+- Not 100% safe, and nothing is. What is guaranteed by construction is no write path to identity or log systems and no out-of-scope read. Wrong explanations and stale ownership data remain possible.
 - No live model, token, ownership source, log source or model gateway has been exercised.
 - The entity check in the validator is a heuristic (tokens that mix letters and digits). Expect occasional false rejects, which fall back to facts only.
 - Skill wording has not been evaluated against a live model. Thresholds in `rules.json` were set against synthetic data.
-- API throttling is global, not per caller. No user interface.
+- The per-caller rate limit is off by default and has not run against a real counter table. No user interface.

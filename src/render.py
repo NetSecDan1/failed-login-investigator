@@ -6,8 +6,9 @@ def _rows(items, label="value", n=5):
 
 
 def to_text(result):
+    ref = "\nReference: %s" % result["reference"] if result.get("reference") else ""
     if result.get("status") != "ok":
-        return "DENIED  %s\n%s" % (result.get("reason"), result.get("message", ""))
+        return "DENIED  %s\n%s%s" % (result.get("reason"), result.get("message", ""), ref)
     if "accounts" in result:
         return "Accounts you own:\n" + "\n".join("  %-28s %s" % (a["account"], a["type"]) for a in result["accounts"])
     f, rep = result["facts"], result.get("report")
@@ -39,4 +40,6 @@ def to_text(result):
         out += ["", "GAPS (sources that could not be read)"] + ["  - " + g for g in f["gaps"]]
     out += ["", "Skills the evidence supports: " + ", ".join(result["candidates"]["allowed"]),
             "Evidence references: " + ", ".join(f["query_ids"])]
+    if result.get("reference"):
+        out.append("Reference to quote: " + result["reference"])
     return "\n".join(out)
