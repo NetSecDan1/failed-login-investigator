@@ -116,7 +116,8 @@ def compute(account, start, end, pack, account_type=None):
         med = statistics.median(deltas)
         mean = statistics.fmean(deltas)
         cv = (statistics.pstdev(deltas) / mean) if mean else 0.0
-        cadence = {"median_gap_seconds": round(med, 1), "variation": round(cv, 2), "regular": cv < 0.25}
+        cadence = {"median_gap_seconds": round(med, 1), "median_gap_minutes": round(med / 60, 1),
+                   "variation": round(cv, 2), "regular": cv < 0.25}
 
     # Per-host rhythm: a fleet of systems each retrying on its own timer looks irregular when merged.
     by_host_times = {}
@@ -178,6 +179,7 @@ def compute(account, start, end, pack, account_type=None):
         "cadence_regular": cadence["regular"] if cadence else None,
         "regular_host_share": regular_host_share,
         "span_minutes": span,
+        "span_hours": round(span / 60, 1) if span is not None else None,
         "pw_change_in_window": bool(last_pw),
         "minutes_pw_change_to_first_failure": mins_after_pw["minutes_to_first_failure"] if mins_after_pw else None,
         "failures_before_pw_change": mins_after_pw["failures_before_change"] if mins_after_pw else None,

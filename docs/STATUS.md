@@ -22,7 +22,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Identity | Real-token authentication | Partially implemented | Authorizer configuration in `template.yaml`, in-application verification in `agent/identity.py`, tested with locally generated keys. No real identity provider token has been used |
 | Identity | Live ownership enforcement | Partially implemented | CSV import, freshness check, most-restrictive conflict rule (`tests/test_operations.py`, `tests/test_import_ownership.py`). No live ownership source |
 | Data | Evidence from real log sources | Partially implemented | `src/backends.py`, `tests/test_backends.py`. Fake transport only |
-| Delivery | Automated tests for authorization, invalid input, failure paths, leakage, output validation | Implemented and evidenced | 160 offline tests, 85% coverage floor enforced in CI |
+| Delivery | Automated tests for authorization, invalid input, failure paths, leakage, output validation | Implemented and evidenced | Offline test suite, 85% coverage floor enforced in CI |
 | Delivery | Build, lint, static security analysis, dependency audit, secret scan, infrastructure lint, checksummed artifact | Implemented and evidenced | `.github/workflows/ci.yml` |
 | Delivery | An adopting organization's required scanners, attestations and release gates | Needs owner confirmation | Not wired in. The CI jobs are stand-ins to be mapped to the required tools |
 | Evaluation | Golden inputs and answers | Partially implemented | 15 synthetic cases. Code offers the expected skill first in all 15. **No live model evaluation has been run** |

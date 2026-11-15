@@ -12,6 +12,9 @@ SYSTEM = (
     "quote numbers exactly as given. Do not suggest changing security policy. Do not offer to "
     "unlock or reset anything. Do not write next steps in the narrative: pick them by number from "
     "the chosen skill's APPROVED STEPS list using next_step_ids, and code will render them.\n"
+    "Every number, time and date in the narrative must appear in FINDINGS exactly as written there. "
+    "Never use the words compromised, hacked or breached, never mention lockout thresholds, never claim to "
+    "have taken or to be able to take an action, and never ask for a password or code.\n"
     "Write the narrative for a busy account owner: plain words, what happened, where, since when, "
     "how sure you are and why. Submit your answer with the submit_report tool only."
 )

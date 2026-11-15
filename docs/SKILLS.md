@@ -23,8 +23,10 @@ evidence can support, whether to escalate, or what the owner should do next. So:
    escalating skills, and `must_escalate` is returned to the caller even if the model never answers.
 4. **Code renders next steps.** Steps are templates in `rules.json`. The model returns step numbers. Host names
    and app names are filled in from validated evidence, so hostile log text cannot reach a step.
-5. **The model writes the narrative and picks confidence.** The validator then checks that every host, address
-   and account in the narrative already exists in the evidence.
+5. **The model writes the narrative and picks confidence.** The validator then checks that every host, address,
+   account, number, time and date in the narrative already exists in the evidence, and rejects a fixed list of
+   unsafe advice and claims (weakening a control, lockout thresholds, actions taken, compromise verdicts,
+   requests for credentials).
 
 ## Skills
 
