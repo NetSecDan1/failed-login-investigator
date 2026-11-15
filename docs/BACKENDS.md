@@ -56,6 +56,21 @@ In the stack these are template parameters: `EvidenceBackend`, `SplunkBaseUrl`, 
 6. **Check coverage.** Confirm every domain controller forwards 4771, 4776 and 4740. A quiet source reads the
    same as a clean one.
 
+## Source health check
+
+A source that collected nothing looks exactly like a clean account. So each investigation also asks every
+source one aggregate question: how many events did you hold from anyone in this window, and from how many
+reporting hosts. The query contains no account and returns a count, never rows (`queries/source_health_*`).
+
+- Zero events: the report lists the source under gaps as possibly broken collection.
+- `EXPECTED_REPORTING_HOSTS` set and fewer hosts reported: the report says how many of the expected domain controllers were seen.
+- The check itself fails: the report says collection could not be checked.
+- `SOURCE_HEALTH_CHECK=false` turns it off. The read-only identity needs permission for the aggregate query
+  (`tstats` on the two indexes, or `SELECT` on the same views).
+
+Time bounds are sent as request parameters (`earliest_time`, `latest_time` in epoch seconds for the search
+export, bound `TIMESTAMP` parameters for SQL), never written into query text.
+
 ## What the normalizer handles
 
 - Time as ISO with any offset, `YYYY-MM-DD HH:MM:SS` (taken as UTC), or epoch seconds. Output is always UTC.

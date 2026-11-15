@@ -3,7 +3,7 @@ import json, urllib.parse
 from datetime import datetime, timedelta, timezone
 import pytest
 from conftest import STORE, ev, no_model
-import backends, handler, scope
+import backends, evidence, handler, scope
 
 S = frozenset({"svc-batch01"})
 T1 = datetime(2026, 11, 12, 18, tzinfo=timezone.utc)
@@ -125,6 +125,8 @@ def test_pipeline_runs_end_to_end_on_a_splunk_backend():
     class Router(Fake):
         def __call__(self, method, url, headers, body, timeout):
             search = urllib.parse.parse_qs(body.decode())["search"][0]
+            if "tstats" in search:
+                return 200, splunk_lines({"events": "5120", "reporting_hosts": "3"} if "wineventlog" in search else {"events": "880"})
             if "azure_signin" in search:
                 return 200, b""
             return 200, splunk_lines(*(events if "4740" in search else failures))
@@ -134,3 +136,52 @@ def test_pipeline_runs_end_to_end_on_a_splunk_backend():
     assert r["status"] == "ok" and r["candidates"]["allowed"][0] == "stale-credential"
     assert r["facts"]["ad"]["by_source_host"][0]["value"] == "APP-BATCH07" and r["facts"]["gaps"] == []
     assert r["facts"]["query_ids"][0] == "splunk:failed_logins:svc-batch01"
+    assert r["facts"]["source_health"] == {"windows": {"events": 5120, "reporting_hosts": 3}, "entra": {"events": 880, "reporting_hosts": None}}
+
+
+def test_time_bounds_travel_as_request_parameters_not_search_text():
+    t = Fake(body=b"")
+    backends.SplunkBackend("https://s.example.test", "tok", FM, transport=t).query("failed_logins", "svc-batch01", T0, T1, S)
+    form = urllib.parse.parse_qs(t.calls[0]["body"].decode())
+    assert form["earliest_time"] == [str(int(T0.timestamp()))] and form["latest_time"] == [str(int(T1.timestamp()))]
+    assert "earliest" not in form["search"][0]
+
+
+def _health_run(monkeypatch, health, expected="0"):
+    files = dict(STORE.d)
+    if health == "missing":
+        files.pop("evidence/_source_health.json")
+    else:
+        files["evidence/_source_health.json"] = json.dumps(health)
+    monkeypatch.setenv("EXPECTED_REPORTING_HOSTS", expected)
+    return handler.handler(ev("E1001", "svc-batch01"), None, store=evidence.DictStore(files), model=no_model)["facts"]
+
+
+def test_a_silent_source_is_reported_not_mistaken_for_a_clean_account(monkeypatch):
+    f = _health_run(monkeypatch, {"windows": {"events": 0, "reporting_hosts": 0}, "entra": {"events": 77, "reporting_hosts": None}})
+    assert f["signals"]["silent_sources"] == 1
+    assert any("directory logon events: the source holds no events from anyone" in g for g in f["gaps"])
+
+
+def test_fewer_reporting_hosts_than_expected_is_a_gap(monkeypatch):
+    f = _health_run(monkeypatch, {"windows": {"events": 500, "reporting_hosts": 2}, "entra": {"events": 77, "reporting_hosts": None}}, expected="6")
+    assert "directory logon events: 2 of 6 expected domain controllers reported in this window" in f["gaps"]
+    assert f["signals"]["silent_sources"] == 0
+
+
+def test_health_that_cannot_be_checked_is_said_so_and_healthy_adds_nothing(monkeypatch):
+    f = _health_run(monkeypatch, "missing")
+    assert f["source_health"] == {"windows": None, "entra": None}
+    assert sum("collection could not be checked" in g for g in f["gaps"]) == 2
+    assert _health_run(monkeypatch, {"windows": {"events": 9, "reporting_hosts": 3}, "entra": {"events": 9, "reporting_hosts": None}})["gaps"] == []
+    monkeypatch.setenv("SOURCE_HEALTH_CHECK", "false")
+    off = _health_run(monkeypatch, "missing")
+    assert off["source_health"] is None and off["gaps"] == [] and off["signals"]["silent_sources"] is None
+
+
+def test_databricks_health_uses_only_time_parameters():
+    t = Fake(body=dbx_body(["events", "reporting_hosts"], [["4200", "3"]]))
+    b = backends.DatabricksBackend("https://dbx.example.test", "wh", "tok", FM, transport=t)
+    assert b.health(T0, T1)["windows"] == {"events": 4200, "reporting_hosts": 3}
+    sent = json.loads(t.calls[0]["body"])
+    assert [p["name"] for p in sent["parameters"]] == ["start", "end"] and "account" not in sent["statement"]

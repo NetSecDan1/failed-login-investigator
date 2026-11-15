@@ -53,7 +53,7 @@
     },
     "facts": {
      "type": "object",
-     "required": ["account", "account_type", "signals", "window", "query_ids", "ad", "entra", "gaps"],
+     "required": ["account", "account_type", "signals", "window", "query_ids", "ad", "entra", "gaps", "source_health"],
      "additionalProperties": false,
      "properties": {
       "account": {"type": "string"},
@@ -62,6 +62,7 @@
       "window": {"type": "object", "required": ["start", "end"], "properties": {"start": {"type": "string"}, "end": {"type": "string"}}},
       "query_ids": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 3},
       "gaps": {"type": "array", "items": {"type": "string"}},
+      "source_health": {"type": ["object", "null"], "description": "Whether each source collected anything at all in the window. Null when the check is off."},
       "ad": {
        "type": "object",
        "required": ["total_failures", "first_seen", "last_seen", "by_source_host", "distinct_source_hosts", "top_source_share",

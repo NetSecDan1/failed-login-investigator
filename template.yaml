@@ -25,6 +25,10 @@ Parameters:
     Type: Number
     Default: 0
     Description: Refuse requests when the ownership data is older than this. 0 turns the check off, which is only acceptable with synthetic data.
+  ExpectedReportingHosts:
+    Type: Number
+    Default: 0
+    Description: Number of domain controllers expected to report logon events. 0 turns the comparison off.
   AlarmTopicArn:
     Type: String
     Default: ""
@@ -218,6 +222,8 @@ Resources:
           MODEL_MAX_OUTPUT_TOKENS: !Ref ModelMaxOutputTokens
           MODEL_TIMEOUT_SECONDS: !Ref ModelTimeoutSeconds
           OWNERSHIP_MAX_AGE_HOURS: !Ref OwnershipMaxAgeHours
+          EXPECTED_REPORTING_HOSTS: !Ref ExpectedReportingHosts
+          SOURCE_HEALTH_CHECK: "true"
           ALLOW_TEST_CLAIMS: !Ref AllowTestClaims
           CALLER_CLAIM: !Ref CallerClaim
           SPLUNK_BASE_URL: !Ref SplunkBaseUrl

@@ -32,7 +32,7 @@ flowchart TD
 |----------|-----------------|---------|
 | Caller to edge | A bearer token and a typed request, or a sentence in agent mode | Token verified at the edge and again in the application. Identity is never read from the request body, a prompt or model output |
 | Application to ownership source | Caller identifier | Read only. Any error, an empty answer or stale data denies the request |
-| Application to log sources | One account name and a time window in a fixed template | Scope re-checked inside every read. Operator settings validated as identifiers. Row, time and window caps |
+| Application to log sources | One account name and a time window in a fixed template, plus one aggregate count per source that names no account | Scope re-checked inside every read. Operator settings validated as identifiers. Row, time and window caps. Time bounds sent as parameters |
 | Log content to model | Counts, codes, validated host names and addresses | Raw rows never reach the model. Text that is not a valid host name or address is replaced |
 | Application to model | Findings, allowed skill choices, approved step lists | One route setting. Token, time and attempt limits. The model has no tools that fetch data |
 | Model to caller | A skill choice, a narrative, step numbers | Schema, allowed-choice, entity, number, time and unsafe-content checks. Steps and the escalation flag come from code |

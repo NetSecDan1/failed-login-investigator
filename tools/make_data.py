@@ -70,6 +70,8 @@ case("ev-mfa", en=entra("50074", "Mobile Apps and Desktop clients", "Microsoft T
 case("ev-cloudspray", en=entra("50126", "Other clients", "Office 365 Exchange Online", ["203.0.113.%d" % i for i in range(1, 25)], 120, 13, 20))
 case("ev-fleet", [r for h in range(8) for r in ad("0xC000006A", 4625, "APP-WEB%02d" % h, "10.70.1.%d" % (10 + h), 12, 1, 3600, 3)])
 
+W("evidence/_source_health.json", {"windows": {"events": 48211, "reporting_hosts": 3}, "entra": {"events": 9120, "reporting_hosts": None}})
+
 own = json.load(open(os.path.join(root, "ownership/ownership.json")))
 for acct in own["owners"]["E1001"]:
     acct["type"] = "privileged" if acct["tier"] == 0 else "service"

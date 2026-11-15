@@ -12,6 +12,8 @@ import scope
 _HERE = os.path.dirname(os.path.abspath(__file__))
 KINDS = ("failed_logins", "account_events", "entra_failures")
 ALLOWED = {"%s.%s" % (k, ext) for k in KINDS for ext in ("spl", "sql")}
+# Aggregate-only templates with no account in them. They return a count, never rows.
+HEALTH = {"source_health_%s.%s" % (k, ext) for k in ("windows", "entra") for ext in ("spl", "sql")}
 SETTING_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,127}$")
 # Operator settings: template placeholder -> environment variable.
 SETTINGS = {"index_windows": "SPLUNK_INDEX_WINDOWS", "index_entra": "SPLUNK_INDEX_ENTRA",
@@ -43,18 +45,37 @@ def _settings(text):
     return text
 
 
+def _window(start, end):
+    if end <= start:
+        raise ValueError("empty window")
+    return _utc(start), _utc(end)
+
+
 def render(name, account, start, end, scope_set):
-    """Return {"text": ..., "params": {...}} for one template. Raises scope.Denied when out of scope."""
+    """Return {"text": ..., "params": {...}} for one template. Raises scope.Denied when out of scope.
+
+    Splunk templates carry the account in the search text and the time bounds as request parameters
+    (epoch seconds). SQL templates carry everything as bound parameters.
+    """
     if name not in ALLOWED:
         raise ValueError("unknown template")
     account = scope.check_account(account, scope_set)   # shape check and scope check, every time
-    if end <= start:
-        raise ValueError("empty window")
-    values = {"account": account, "start": _utc(start), "end": _utc(end)}
+    s, e = _window(start, end)
     with open(os.path.join(template_dir(), name)) as f:
         text = _settings(f.read())
     if name.endswith(".sql"):
-        return {"text": text, "params": values}
-    for key, val in values.items():
-        text = text.replace("{%s}" % key, val)
-    return {"text": text, "params": {}}
+        return {"text": text, "params": {"account": account, "start": s, "end": e}}
+    return {"text": text.replace("{account}", account),
+            "params": {"earliest_time": str(int(start.timestamp())), "latest_time": str(int(end.timestamp()))}}
+
+
+def render_health(name, start, end):
+    """A source activity count for the window. No account, no rows, only operator settings."""
+    if name not in HEALTH:
+        raise ValueError("unknown template")
+    s, e = _window(start, end)
+    with open(os.path.join(template_dir(), name)) as f:
+        text = _settings(f.read())
+    if name.endswith(".sql"):
+        return {"text": text, "params": {"start": s, "end": e}}
+    return {"text": text, "params": {"earliest_time": str(int(start.timestamp())), "latest_time": str(int(end.timestamp()))}}

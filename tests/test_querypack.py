@@ -17,8 +17,9 @@ T0 = T1 - timedelta(hours=24)
 
 def test_spl_renders_only_validated_values():
     q = querypack.render("failed_logins.spl", "SVC-Batch01", T0, T1, S)
-    assert 'user="svc-batch01"' in q["text"] and 'earliest="2026-11-11T18:00:00"' in q["text"]
-    assert "index=wineventlog" in q["text"] and "{" not in q["text"] and q["params"] == {}
+    assert 'user="svc-batch01"' in q["text"] and "earliest" not in q["text"]
+    assert q["params"] == {"earliest_time": str(int(T0.timestamp())), "latest_time": str(int(T1.timestamp()))}
+    assert "index=wineventlog" in q["text"] and "{" not in q["text"]
 
 def test_sql_uses_bound_parameters_not_text():
     q = querypack.render("failed_logins.sql", "svc-batch01", T0, T1, S)
@@ -64,3 +65,13 @@ def test_all_six_templates_render():
     for name in sorted(querypack.ALLOWED):
         q = querypack.render(name, "svc-batch01", T0, T1, S)
         assert "{" not in q["text"], name
+
+def test_health_templates_carry_no_account_and_only_count():
+    for name in sorted(querypack.HEALTH):
+        q = querypack.render_health(name, T0, T1)
+        assert "{" not in q["text"] and "account" not in q["text"].lower() and "user=" not in q["text"]
+        assert "count" in q["text"].lower()
+    with pytest.raises(ValueError):
+        querypack.render_health("failed_logins.spl", T0, T1)
+    with pytest.raises(ValueError):
+        querypack.render("source_health_windows.spl", "svc-batch01", T0, T1, S)

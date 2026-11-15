@@ -124,7 +124,10 @@ def _run(event, context, store, model, backend):
         audit["source_errors"] = {k: pack[k]["error_detail"] for k in backends.ROW_CAP if pack[k].get("error_detail")}
 
         # 5. Findings (all numbers computed here, never by the model).
-        facts = findings.compute(account, start, end, pack, account_meta.get(account))
+        source = backend or backends.make_backend(store)
+        health = source.health(start, end) if os.environ.get("SOURCE_HEALTH_CHECK", "true").lower() == "true" else None
+        facts = findings.compute(account, start, end, pack, account_meta.get(account), health,
+                                 int(os.environ.get("EXPECTED_REPORTING_HOSTS", "0") or 0))
 
         # 6. Code decides which skills the evidence can support, and renders their approved steps.
         skills = explain.load_skills(store)

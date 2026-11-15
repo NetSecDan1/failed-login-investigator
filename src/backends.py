@@ -133,6 +133,22 @@ class Backend:
             out["error"] = note
         return out
 
+    def health_counts(self, source, start, end):
+        """Return {"events": int, "reporting_hosts": int or None} for one source. Backends override this."""
+        raise NotImplementedError
+
+    def health(self, start, end):
+        """Was each source collecting anything at all in this window? None means it could not be checked."""
+        out = {}
+        for source in ("windows", "entra"):
+            try:
+                counts = self.health_counts(source, start, end)
+                out[source] = {"events": int(counts["events"]),
+                               "reporting_hosts": int(counts["reporting_hosts"]) if counts.get("reporting_hosts") is not None else None}
+            except Exception:
+                out[source] = None
+        return out
+
 
 class FileBackend(Backend):
     name = "file"
@@ -154,6 +170,9 @@ class FileBackend(Backend):
         rows = sorted((r for r in rows if start <= ts(r["time"]) < end), key=lambda r: r["time"])
         return rows, None
 
+    def health_counts(self, source, start, end):
+        return json.loads(self.store.get("evidence/_source_health.json"))[source]
+
 
 class SplunkBackend(Backend):
     """POST {base}/services/search/jobs/export with a rendered template. Token needs a read-only role."""
@@ -165,12 +184,12 @@ class SplunkBackend(Backend):
         self.base, self.token, self.transport, self.timeout = base_url.rstrip("/"), token, transport, timeout
         self.field_map = field_map or load_field_map()
 
-    def fetch(self, kind, account, start, end, scope_set):
-        q = querypack.render(kind + ".spl", account, start, end, scope_set)
-        body = urllib.parse.urlencode({"search": q["text"], "output_mode": "json"}).encode()
+    def _export(self, q):
+        form = dict(q["params"], search=q["text"], output_mode="json")
         status, data = self.transport("POST", self.base + "/services/search/jobs/export",
                                       {"Authorization": "Bearer " + self.token,
-                                       "Content-Type": "application/x-www-form-urlencoded"}, body, self.timeout)
+                                       "Content-Type": "application/x-www-form-urlencoded"},
+                                      urllib.parse.urlencode(form).encode(), self.timeout)
         if status != 200:
             raise RuntimeError("splunk http %s" % status)
         raw = []
@@ -181,8 +200,18 @@ class SplunkBackend(Backend):
             obj = json.loads(line)
             if isinstance(obj.get("result"), dict):
                 raw.append(obj["result"])
+        return raw
+
+    def fetch(self, kind, account, start, end, scope_set):
+        raw = self._export(querypack.render(kind + ".spl", account, start, end, scope_set))
         rows, dropped = normalize(kind, raw, self.field_map)
         return rows, ("rows_dropped_no_time:%d" % dropped if dropped else None)
+
+    def health_counts(self, source, start, end):
+        raw = self._export(querypack.render_health("source_health_%s.spl" % source, start, end))
+        row = raw[0] if raw else {}
+        return {"events": int(float(row.get("events") or 0)),
+                "reporting_hosts": int(float(row["reporting_hosts"])) if row.get("reporting_hosts") not in (None, "") else None}
 
 
 class DatabricksBackend(Backend):
@@ -196,13 +225,11 @@ class DatabricksBackend(Backend):
         self.transport, self.timeout = transport, timeout
         self.field_map = field_map or load_field_map()
 
-    def fetch(self, kind, account, start, end, scope_set):
-        q = querypack.render(kind + ".sql", account, start, end, scope_set)
+    def _statement(self, q):
+        types = {"account": "STRING", "start": "TIMESTAMP", "end": "TIMESTAMP"}
         payload = {"statement": q["text"], "warehouse_id": self.warehouse, "wait_timeout": "50s",
                    "on_wait_timeout": "CANCEL", "format": "JSON_ARRAY", "disposition": "INLINE",
-                   "parameters": [{"name": "account", "value": q["params"]["account"], "type": "STRING"},
-                                  {"name": "start", "value": q["params"]["start"], "type": "TIMESTAMP"},
-                                  {"name": "end", "value": q["params"]["end"], "type": "TIMESTAMP"}]}
+                   "parameters": [{"name": k, "value": v, "type": types[k]} for k, v in q["params"].items()]}
         status, data = self.transport("POST", self.host + "/api/2.0/sql/statements",
                                       {"Authorization": "Bearer " + self.token, "Content-Type": "application/json"},
                                       json.dumps(payload).encode(), self.timeout)
@@ -214,11 +241,19 @@ class DatabricksBackend(Backend):
             raise RuntimeError("databricks statement state %s" % state)
         cols = [c["name"] for c in resp["manifest"]["schema"]["columns"]]
         raw = [dict(zip(cols, r, strict=False)) for r in (resp.get("result") or {}).get("data_array") or []]
+        return raw, bool(resp["manifest"].get("truncated"))
+
+    def fetch(self, kind, account, start, end, scope_set):
+        raw, truncated = self._statement(querypack.render(kind + ".sql", account, start, end, scope_set))
         rows, dropped = normalize(kind, raw, self.field_map)
         note = "rows_dropped_no_time:%d" % dropped if dropped else None
-        if resp["manifest"].get("truncated"):
-            note = "truncated_by_source"
-        return rows, note
+        return rows, ("truncated_by_source" if truncated else note)
+
+    def health_counts(self, source, start, end):
+        raw, _ = self._statement(querypack.render_health("source_health_%s.sql" % source, start, end))
+        row = raw[0] if raw else {}
+        return {"events": int(float(row.get("events") or 0)),
+                "reporting_hosts": int(float(row["reporting_hosts"])) if row.get("reporting_hosts") is not None else None}
 
 
 def make_backend(store):

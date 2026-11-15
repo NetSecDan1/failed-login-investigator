@@ -1,3 +1,3 @@
-search index={index_windows} EventCode IN (4625,4771,4776) user="{account}" earliest="{start}" latest="{end}"
+search index={index_windows} EventCode IN (4625,4771,4776) user="{account}"
 | sort 0 _time
 | head 5000

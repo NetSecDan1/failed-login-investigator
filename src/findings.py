@@ -94,13 +94,27 @@ def _share(counter, group, total):
     return round(sum(v for k, v in counter.items() if k in group) / total, 2)
 
 
-def compute(account, start, end, pack, account_type=None):
+def compute(account, start, end, pack, account_type=None, health=None, expected_hosts=0):
     fl, ev, en = pack["failed_logins"], pack["account_events"], pack["entra_failures"]
     rows = fl["rows"]
     gaps = ["%s: %s" % (k, pack[k]["error"]) for k in ("failed_logins", "account_events", "entra_failures")
             if pack[k].get("error")]
     if fl.get("truncated"):
         gaps.append("failed_logins: truncated at row cap")
+
+    # A source that collected nothing for anyone looks the same as a clean account, so say so.
+    silent = None
+    if health is not None:
+        silent = 0
+        for source, what in (("windows", "directory logon events"), ("entra", "cloud sign-in events")):
+            h = health.get(source)
+            if h is None:
+                gaps.append("%s: collection could not be checked" % what)
+            elif h["events"] == 0:
+                silent += 1
+                gaps.append("%s: the source holds no events from anyone in this window, collection may be broken" % what)
+            elif source == "windows" and expected_hosts and h["reporting_hosts"] is not None and h["reporting_hosts"] < expected_hosts:
+                gaps.append("%s: %d of %d expected domain controllers reported in this window" % (what, h["reporting_hosts"], expected_hosts))
 
     hosts = Counter(host(r.get("src_host")) for r in rows)
     ips = Counter(ip_text(r.get("src_ip")) for r in rows if r.get("src_ip"))
@@ -193,6 +207,7 @@ def compute(account, start, end, pack, account_type=None):
         "entra_legacy_client_share": _share(en_clients, ENTRA_LEGACY_CLIENTS, en_total),
         "entra_distinct_ips": len(en_ips),
         "missing_sources": len(gaps),
+        "silent_sources": silent,
     }
 
     return {
@@ -227,5 +242,6 @@ def compute(account, start, end, pack, account_type=None):
             "by_app": _top(en_apps, 3),
             "by_source_ip": _top(Counter(ip for ip in (ip_text(r.get("src_ip")) for r in en["rows"] if r.get("src_ip"))), 5),
         },
+        "source_health": health,
         "gaps": gaps,
     }
