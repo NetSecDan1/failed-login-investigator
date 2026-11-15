@@ -1,5 +1,5 @@
 # Tooling for tests and the quality gates in .github/workflows/ci.yml
-pytest==9.1.1
+pytest==9.2.0
 pytest-cov==7.1.0
 pyyaml==6.0.3
 jsonschema==4.26.0
