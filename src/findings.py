@@ -108,6 +108,8 @@ def compute(account, start, end, pack, account_type=None, health=None, expected_
         silent = 0
         for source, what in (("windows", "directory logon events"), ("entra", "cloud sign-in events")):
             h = health.get(source)
+            if h == "not_configured":                 # the evidence gap for this source already says so
+                continue
             if h is None:
                 gaps.append("%s: collection could not be checked" % what)
             elif h["events"] == 0:

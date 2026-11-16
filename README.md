@@ -32,7 +32,7 @@ facts table, the escalation flag, and no summary. The design brief is in [`docs/
 |-------|--------------|-------------------|
 | Caller identity | Test claims in the event (`ALLOW_TEST_CLAIMS=true`) | Entra JWT through the optional HTTP API and JWT authorizer in `template.yaml`. Not yet deployed or tested with a real token |
 | Ownership | `ownership/ownership.json` in S3, generated | SailPoint IIQ API or scheduled export |
-| Evidence | `evidence/<account>.json` in S3, generated (`EVIDENCE_BACKEND=file`) | Splunk or Databricks through `src/backends.py`. Built and unit tested against fake responses, not yet run live. See [`docs/BACKENDS.md`](docs/BACKENDS.md) |
+| Evidence | Synthetic JSON in the data bucket (`EVIDENCE_BACKEND=file`) | Any mix of sources behind one contract, routed per kind of evidence. Adapters exist for a log platform, a lakehouse, scheduled report exports, and two cloud sign-in sources. All tested against fake responses only. See [`docs/SOURCES.md`](docs/SOURCES.md) |
 | Skill files | 13 skills in `skills/`, synced to S3. See [`docs/SKILLS.md`](docs/SKILLS.md) | Same, with pull request review |
 | Audit | One `AUDIT` JSON line per request in CloudWatch | Plus immutable S3 copy and forward to the SIEM |
 
@@ -63,7 +63,7 @@ Other ways to deploy, the HTTP API and its parameters: [`docs/DEPLOY.md`](docs/D
 
 | Path | What |
 |------|------|
-| `src/` | The pipeline. `handler.py` is the entry point. `modelroute.py` decides how the model is reached |
+| `src/` | The pipeline. `handler.py` is the entry point. `adapters.py` wires evidence sources, `modelroute.py` decides how the model is reached |
 | `skills/` | 13 skills, each `SKILL.md` plus `rules.json` |
 | `queries/`, `config/field_map.json` | Fixed query templates and the source field mapping |
 | `evals/cases.json` | One synthetic case per skill |
@@ -89,7 +89,7 @@ the evidence does not support, a model trying to talk down a mandatory escalatio
 
 ## Guardrails in one list
 
-- No write path to any identity or log system. The role allows `s3:GetObject`, `bedrock:InvokeModel`, `bedrock:ApplyGuardrail` and its own log writes, with an explicit deny on everything else. With the per-caller rate limit on, it may also update one counter table of its own.
+- No write path to any identity or log system. The role allows `s3:GetObject` and `s3:ListBucket` on its own bucket, `bedrock:InvokeModel`, `bedrock:ApplyGuardrail` and its own log writes, with an explicit deny on everything else. With the per-caller rate limit on, it may also update one counter table of its own.
 - Scope is resolved per request from the ownership source and re-checked inside every read tool.
 - Unowned and nonexistent accounts get the same answer, so the agent is not an existence oracle.
 - Read tools take `(account, start, end)` only. No free-text queries.
@@ -128,7 +128,7 @@ no return on investment is claimed yet. [`docs/RISKS.md`](docs/RISKS.md) is the 
 ## Known limits
 
 - Not 100% safe, and nothing is. What is guaranteed by construction is no write path to identity or log systems and no out-of-scope read. Wrong explanations and stale ownership data remain possible.
-- No live model, token, ownership source, log source or model gateway has been exercised.
+- No live model, token, ownership source, evidence source or model gateway has been exercised.
 - The entity check in the validator is a heuristic (tokens that mix letters and digits). Expect occasional false rejects, which fall back to facts only.
 - Skill wording has not been evaluated against a live model. Thresholds in `rules.json` were set against synthetic data.
 - The per-caller rate limit is off by default and has not run against a real counter table. No user interface.

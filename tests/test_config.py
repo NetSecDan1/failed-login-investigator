@@ -59,3 +59,18 @@ def test_typos_are_warned(tmp_path, capsys):
     f.write_text("\n".join("%s=%s" % kv for kv in dict(GOOD, MODEL_ROUT="gateway").items()))
     assert pre.main(["--env-file", str(f)]) == 0
     assert "MODEL_ROUT " in capsys.readouterr().out
+
+
+def test_per_kind_routes_are_checked():
+    mixed = dict(GOOD, EVIDENCE_SOURCES="entra_failures=graph", SPLUNK_INDEX_ENTRA="")
+    assert blocks(mixed) == {"ENTRA_TENANT_ID", "ENTRA_CLIENT_ID", "ENTRA_CLIENT_SECRET_ARN"}
+    ok = dict(mixed, ENTRA_TENANT_ID="t", ENTRA_CLIENT_ID="c", ENTRA_CLIENT_SECRET_ARN="arn:z")
+    assert blocks(ok) == set()
+    assert "ENTRA_CLIENT_SECRET" in blocks(dict(ok, ENTRA_CLIENT_SECRET="plain"))
+    assert "LOGANALYTICS_WORKSPACE_ID" in blocks(dict(ok, EVIDENCE_SOURCES="entra_failures=loganalytics"))
+    assert "EVIDENCE_SOURCES" in blocks(dict(GOOD, EVIDENCE_SOURCES="failed_logins=graph"))
+    assert "EVIDENCE_SOURCES" in blocks(dict(GOOD, EVIDENCE_SOURCES="entra_failures=nowhere"))
+    assert "EVIDENCE_BACKEND" in blocks(dict(GOOD, EVIDENCE_SOURCES="account_events=file"))
+    none_yet = pre.check(dict(GOOD, EVIDENCE_SOURCES="entra_failures=none", SPLUNK_INDEX_ENTRA=""))
+    assert ("WARN", "EVIDENCE_SOURCES", "entra_failures has no source, every report will carry that gap") in none_yet
+    assert not [f for f in none_yet if f[0] == "BLOCK"]

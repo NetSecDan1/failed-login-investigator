@@ -55,25 +55,36 @@ def check(env, runtime="function"):
         block("SOURCE_HEALTH_CHECK", "must be true so a silent source is not read as a clean account")
     if number("EXPECTED_REPORTING_HOSTS", 1) is None:
         warn("EXPECTED_REPORTING_HOSTS", "is 0, partial collection from domain controllers will not be noticed")
-    for n in ("SPLUNK_TOKEN", "DATABRICKS_TOKEN", "MODEL_GATEWAY_TOKEN"):
+    for n in ("SPLUNK_TOKEN", "DATABRICKS_TOKEN", "MODEL_GATEWAY_TOKEN", "ENTRA_CLIENT_SECRET"):
         if env.get(n):
             block(n, "a plain token is set: use the secret reference instead")
     for n in ("SPLUNK_BASE_URL", "DATABRICKS_HOST", "MODEL_GATEWAY_URL", "JWT_JWKS_URL"):
         if get(n) and not get(n).lower().startswith("https://"):
             block(n, "must use https")
 
-    backend = get("EVIDENCE_BACKEND").lower()
-    need = {"splunk": ["SPLUNK_BASE_URL", "SPLUNK_INDEX_WINDOWS", "SPLUNK_INDEX_ENTRA", "SPLUNK_TOKEN_SECRET_ARN"],
+    cloud = ["ENTRA_TENANT_ID", "ENTRA_CLIENT_ID", "ENTRA_CLIENT_SECRET_ARN"]
+    need = {"splunk": ["SPLUNK_BASE_URL", "SPLUNK_INDEX_WINDOWS", "SPLUNK_TOKEN_SECRET_ARN"],
             "databricks": ["DATABRICKS_HOST", "DATABRICKS_WAREHOUSE_ID", "DATABRICKS_VIEW_FAILED_LOGINS",
-                           "DATABRICKS_VIEW_ACCOUNT_EVENTS", "DATABRICKS_VIEW_ENTRA_FAILURES", "DATABRICKS_TOKEN_SECRET_ARN"]}
-    if backend == "file":
-        block("EVIDENCE_BACKEND", "is file, which is synthetic data")
-    elif backend not in need:
-        block("EVIDENCE_BACKEND", "is not one of file, splunk, databricks")
-    else:
-        for n in need[backend]:
+                           "DATABRICKS_VIEW_ACCOUNT_EVENTS", "DATABRICKS_TOKEN_SECRET_ARN"],
+            "graph": cloud, "loganalytics": cloud + ["LOGANALYTICS_WORKSPACE_ID"], "export": [], "none": [], "file": []}
+    per_kind = {("splunk", "entra_failures"): ["SPLUNK_INDEX_ENTRA"], ("databricks", "entra_failures"): ["DATABRICKS_VIEW_ENTRA_FAILURES"]}
+    sys.path.insert(0, os.path.join(ROOT, "src"))
+    import adapters
+    try:
+        routes = adapters.parse_routes(get("EVIDENCE_BACKEND").lower(), get("EVIDENCE_SOURCES"))
+    except ValueError as e:
+        block("EVIDENCE_SOURCES", str(e))
+        routes = {}
+    for kind, source in sorted(routes.items()):
+        if source == "file":
+            block("EVIDENCE_BACKEND", "%s resolves to file, which is synthetic data" % kind)
+        if source == "none":
+            (block if kind == "failed_logins" else warn)("EVIDENCE_SOURCES", "%s has no source, every report will carry that gap" % kind)
+        if source in ("graph", "loganalytics") and kind != "entra_failures":
+            block("EVIDENCE_SOURCES", "%s cannot come from %s, which only answers cloud sign-ins" % (kind, source))
+        for n in need.get(source, []) + per_kind.get((source, kind), []):
             if not get(n):
-                block(n, "is required for the %s backend" % backend)
+                block(n, "is required for the %s source" % source)
             elif (n.startswith("SPLUNK_INDEX") or "_VIEW_" in n) and not IDENT.fullmatch(get(n)):
                 block(n, "must be a plain identifier")
 
@@ -99,7 +110,7 @@ def check(env, runtime="function"):
         for n in ("JWT_ISSUER", "JWT_AUDIENCE", "JWT_JWKS_URL"):
             if not get(n):
                 block(n, "is required for the agent runtime: without it no caller can be verified")
-    unknown = sorted(k for k in env if k not in reg and re.match(r"^(MODEL|SPLUNK|DATABRICKS|JWT|RATE|OWNERSHIP|AGENT|EVIDENCE|GUARDRAIL)_", k))
+    unknown = sorted(k for k in env if k not in reg and re.match(r"^(MODEL|SPLUNK|DATABRICKS|JWT|RATE|OWNERSHIP|AGENT|EVIDENCE|GUARDRAIL|ENTRA|LOGANALYTICS|EXPORT)_", k))
     for k in unknown:
         warn(k, "is not a setting this code reads. Check for a typo")
     return out

@@ -64,7 +64,20 @@ Parameters:
   EvidenceBackend:
     Type: String
     Default: file
-    AllowedValues: [file, splunk, databricks]
+    AllowedValues: [file, none, splunk, databricks, export, graph, loganalytics]
+    Description: Default evidence source for every kind of evidence
+  EvidenceSources:
+    Type: String
+    Default: ""
+    Description: Optional per-kind overrides, for example failed_logins=splunk,account_events=splunk,entra_failures=none
+  ExportPrefix: {Type: String, Default: exports}
+  EntraTenantId: {Type: String, Default: ""}
+  EntraClientId: {Type: String, Default: ""}
+  EntraClientSecretArn:
+    Type: String
+    Default: ""
+    Description: Optional. Secrets Manager ARN holding the read-only cloud application credential as a plain string.
+  LogAnalyticsWorkspaceId: {Type: String, Default: ""}
   BackendTokenSecretArn:
     Type: String
     Default: ""
@@ -91,6 +104,7 @@ Parameters:
 Conditions:
   HasApi: !Not [!Equals [!Ref JwtIssuer, ""]]
   HasSecret: !Not [!Equals [!Ref BackendTokenSecretArn, ""]]
+  HasCloudSecret: !Not [!Equals [!Ref EntraClientSecretArn, ""]]
   HasGatewaySecret: !Not [!Equals [!Ref ModelGatewayTokenSecretArn, ""]]
   HasRateLimit: !Not [!Equals [!Ref RateLimitPerHour, 0]]
   HasAlarms: !Not [!Equals [!Ref AlarmTopicArn, ""]]
@@ -144,6 +158,10 @@ Resources:
                 Effect: Allow
                 Action: s3:GetObject
                 Resource: !Sub "${DataBucket.Arn}/*"
+              - Sid: TellMissingFromUnreadable
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt DataBucket.Arn
               - Sid: InvokeClaude
                 Effect: Allow
                 Action: bedrock:InvokeModel
@@ -164,6 +182,13 @@ Resources:
                   Effect: Allow
                   Action: dynamodb:UpdateItem
                   Resource: !GetAtt RateTable.Arn
+                - !Ref AWS::NoValue
+              - !If
+                - HasCloudSecret
+                - Sid: ReadCloudCredential
+                  Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref EntraClientSecretArn
                 - !Ref AWS::NoValue
               - !If
                 - HasSecret
@@ -191,6 +216,7 @@ Resources:
                 NotAction:
                   - kms:Decrypt
                   - s3:GetObject
+                  - s3:ListBucket
                   - bedrock:InvokeModel
                   - bedrock:ApplyGuardrail
                   - logs:CreateLogStream
@@ -239,6 +265,12 @@ Resources:
           GUARDRAIL_ID: !GetAtt Guardrail.GuardrailId
           GUARDRAIL_VERSION: DRAFT
           EVIDENCE_BACKEND: !Ref EvidenceBackend
+          EVIDENCE_SOURCES: !Ref EvidenceSources
+          EXPORT_PREFIX: !Ref ExportPrefix
+          ENTRA_TENANT_ID: !Ref EntraTenantId
+          ENTRA_CLIENT_ID: !Ref EntraClientId
+          ENTRA_CLIENT_SECRET_ARN: !If [HasCloudSecret, !Ref EntraClientSecretArn, ""]
+          LOGANALYTICS_WORKSPACE_ID: !Ref LogAnalyticsWorkspaceId
           AGENT_ENABLED: !Ref AgentEnabled
           METRICS_EMF: "true"
           MODEL_ROUTE: !Ref ModelRoute

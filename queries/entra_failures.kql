@@ -1,0 +1,6 @@
+union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs, AADServicePrincipalSignInLogs
+| where UserPrincipalName =~ "{signin_name}"
+| where ResultType != "0"
+| project TimeGenerated, ResultType, ClientAppUsed, AppDisplayName, IPAddress
+| order by TimeGenerated asc
+| take 5000

@@ -35,6 +35,9 @@ def convert(rows, cols, require_tier=False):
         entry = {"account": account, "application": (row.get(cols.get("app") or "") or "").strip() or "unknown",
                  "tier": tier if tier is not None else "unknown",
                  "type": TYPES.get((row.get(cols.get("type") or "") or "").strip().lower(), "unknown")}
+        signin = (row.get(cols.get("signin") or "") or "").strip().lower()
+        if signin:
+            entry["signin_name"] = signin
         bucket = owners.setdefault(owner, [])
         if all(e["account"] != account for e in bucket):
             bucket.append(entry)
@@ -51,6 +54,7 @@ def main(argv=None):
     ap.add_argument("--owner-col", required=True)
     ap.add_argument("--account-col", required=True)
     ap.add_argument("--app-col"); ap.add_argument("--type-col"); ap.add_argument("--tier-col")
+    ap.add_argument("--signin-col", help="column holding the account's cloud sign-in name, when it has one")
     ap.add_argument("--deny-file", help="text file, one account per line, never investigable through self-service")
     ap.add_argument("--require-tier", action="store_true")
     a = ap.parse_args(argv)
@@ -60,7 +64,7 @@ def main(argv=None):
             if needed not in (reader.fieldnames or []):
                 raise SystemExit("column not found: %r. Columns are: %s" % (needed, reader.fieldnames))
         owners, stats = convert(reader, {"owner": a.owner_col, "account": a.account_col, "app": a.app_col,
-                                         "type": a.type_col, "tier": a.tier_col}, a.require_tier)
+                                         "type": a.type_col, "tier": a.tier_col, "signin": a.signin_col}, a.require_tier)
     deny = []
     if a.deny_file:
         deny = sorted({line.strip().lower() for line in open(a.deny_file) if line.strip() and not line.startswith("#")})

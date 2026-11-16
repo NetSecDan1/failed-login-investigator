@@ -18,7 +18,14 @@ defaults. Passing it does not mean the deployment is approved or has been tested
 | `OWNERSHIP_MAX_AGE_HOURS` | `0` | Refuse requests when ownership data is older than this. 0 is off. | must be above 0 |
 | `RATE_LIMIT_PER_HOUR` | `0` | Investigations allowed per caller per clock hour. 0 is off. | must be above 0 |
 | `RATE_LIMIT_TABLE` | empty | Counter table shared by all instances. Empty keeps the count in one process. | required when the limit is on |
-| `EVIDENCE_BACKEND` | `file` | file (synthetic), splunk or databricks. | must not be file |
+| `EVIDENCE_BACKEND` | `file` | Default evidence source for every kind: file (synthetic), none, splunk, databricks, export, graph or loganalytics. | must not be file |
+| `EVIDENCE_SOURCES` | empty | Per-kind overrides of the default, such as failed_logins=splunk,entra_failures=graph. Kinds: failed_logins, account_events, entra_failures. | no kind may resolve to file |
+| `EXPORT_PREFIX` | `exports` | Folder in the data bucket where scheduled report exports land, for the export source. |  |
+| `ENTRA_TENANT_ID` | empty | Cloud identity tenant, for the graph and loganalytics sources. | required for graph or loganalytics |
+| `ENTRA_CLIENT_ID` | empty | Read-only application identity used by the graph and loganalytics sources. | required for graph or loganalytics |
+| `ENTRA_CLIENT_SECRET_ARN` | empty | Secret holding that application's credential. | required for graph or loganalytics |
+| `ENTRA_CLIENT_SECRET` | empty | Plain credential. Local runs only. | must be empty |
+| `LOGANALYTICS_WORKSPACE_ID` | empty | Log workspace holding the sign-in tables, for the loganalytics source. | required for loganalytics |
 | `SOURCE_HEALTH_CHECK` | `true` | Ask each source for an activity count so a silent source is not read as a clean account. | must be true |
 | `EXPECTED_REPORTING_HOSTS` | `0` | Domain controllers expected to report. 0 skips the comparison. | should be above 0 |
 | `FIELD_MAP_PATH` | empty | Path to a field map other than config/field_map.json. |  |

@@ -36,6 +36,7 @@ Resources:
           - Effect: Allow
             Action:
               - s3:GetObject
+              - s3:ListBucket
               - bedrock:InvokeModel
               - bedrock:ApplyGuardrail
               - logs:CreateLogStream

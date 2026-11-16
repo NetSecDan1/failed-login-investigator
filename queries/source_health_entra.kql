@@ -1,0 +1,2 @@
+union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs
+| summarize events = count()

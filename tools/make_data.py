@@ -76,7 +76,8 @@ own = json.load(open(os.path.join(root, "ownership/ownership.json")))
 for acct in own["owners"]["E1001"]:
     acct["type"] = "privileged" if acct["tier"] == 0 else "service"
 own["owners"]["E2002"][0]["type"] = "service"
-own["owners"]["E5000"] = [{"account": a, "application": app, "tier": 2, "type": t} for a, app, t in [
+own["owners"]["E5000"] = [dict({"account": a, "application": app, "tier": 2, "type": t},
+                               **({"signin_name": a + "@example.test"} if app == "Entra" else {})) for a, app, t in [
     ("ev-disabled", "AD", "service"), ("ev-pwexpired", "AD", "service"), ("ev-acctexpired", "AD", "person"), ("ev-skew", "AD", "service"),
     ("ev-restrict", "AD", "person"), ("ev-aftermath", "AD", "service"), ("ev-nochange", "AD", "service"), ("ev-cablock", "Entra", "person"),
     ("ev-legacy", "Entra", "person"), ("ev-mfa", "Entra", "person"), ("ev-cloudspray", "Entra", "person"), ("ev-fleet", "AD", "service")]]

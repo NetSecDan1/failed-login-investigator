@@ -151,7 +151,7 @@ curl -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" \
 
 Status codes: 200 ok, 400 bad input, 401 no verified caller, 403 not yours or nothing owned, 503 ownership source down.
 
-Real evidence sources are covered in [`BACKENDS.md`](BACKENDS.md).
+Real evidence sources are covered in [`SOURCES.md`](SOURCES.md).
 
 ## Before a real deployment: preflight
 

@@ -122,7 +122,7 @@ def _run(event, context, store, model, backend, reference):
 
         if route != "POST /investigations":
             audit["outcome"] = "listed"
-            return {"status": "ok", "accounts": [{"account": a, "type": account_meta.get(a) or "unknown"} for a in sorted(scope_set)]}
+            return {"status": "ok", "accounts": [{"account": a, "type": account_meta[a]["type"] or "unknown"} for a in sorted(scope_set)]}
 
         # 3. Request validation. Account must be well formed AND in scope.
         req = _request(event)
@@ -131,14 +131,14 @@ def _run(event, context, store, model, backend, reference):
         audit.update(account=account, window=[start.isoformat(), end.isoformat()])
 
         # 4. Collect. Every tool re-checks scope itself.
-        pack = evidence.collect(account, start, end, scope_set, backend or backends.make_backend(store))
+        source = backend or backends.make_backend(store)
+        pack = evidence.collect(account, start, end, scope_set, source, account_meta[account]["signin_name"])
         audit["query_ids"] = pack["query_ids"]
         audit["source_errors"] = {k: pack[k]["error_detail"] for k in backends.ROW_CAP if pack[k].get("error_detail")}
 
         # 5. Findings (all numbers computed here, never by the model).
-        source = backend or backends.make_backend(store)
         health = source.health(start, end) if os.environ.get("SOURCE_HEALTH_CHECK", "true").lower() == "true" else None
-        facts = findings.compute(account, start, end, pack, account_meta.get(account), health,
+        facts = findings.compute(account, start, end, pack, account_meta[account]["type"], health,
                                  int(os.environ.get("EXPECTED_REPORTING_HOSTS", "0") or 0))
 
         # 6. Code decides which skills the evidence can support, and renders their approved steps.

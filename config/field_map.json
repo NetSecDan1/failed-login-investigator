@@ -1,26 +1,141 @@
 {
  "_comment": "Maps source field names to the internal row shape. For each internal field, the first source field that is present and not empty wins. Edit this file to match your Splunk add-on or Databricks schema. Nothing here is caller input.",
- "skip_values": ["", "-", "0x0", "0x00000000"],
+ "skip_values": [
+  "",
+  "-",
+  "0x0",
+  "0x00000000"
+ ],
  "failed_logins": {
-  "time": ["_time", "event_time", "TimeCreated"],
-  "event_code": ["EventCode", "event_code", "EventID", "signature_id"],
-  "failure_code": ["Sub_Status", "SubStatus", "Failure_Code", "FailureCode", "Error_Code", "failure_code", "Status", "Result_Code"],
-  "src_host": ["Workstation_Name", "WorkstationName", "Source_Workstation", "Workstation", "src_host", "src_nt_host", "src"],
-  "src_ip": ["Source_Network_Address", "IpAddress", "Client_Address", "src_ip"],
-  "dc_host": ["dest", "host", "ComputerName", "Computer", "dc_host"],
-  "logon_type": ["Logon_Type", "LogonType", "logon_type"]
+  "time": [
+   "_time",
+   "event_time",
+   "TimeCreated",
+   "Time",
+   "Logon Time",
+   "Event Time"
+  ],
+  "event_code": [
+   "EventCode",
+   "event_code",
+   "EventID",
+   "signature_id"
+  ],
+  "failure_code": [
+   "Sub_Status",
+   "SubStatus",
+   "Failure_Code",
+   "FailureCode",
+   "Error_Code",
+   "failure_code",
+   "Status",
+   "Result_Code",
+   "Failure Reason Code",
+   "Reason Code"
+  ],
+  "src_host": [
+   "Workstation_Name",
+   "WorkstationName",
+   "Source_Workstation",
+   "Workstation",
+   "src_host",
+   "src_nt_host",
+   "src",
+   "Client Host Name",
+   "Client Machine"
+  ],
+  "src_ip": [
+   "Source_Network_Address",
+   "IpAddress",
+   "Client_Address",
+   "src_ip",
+   "Client IP Address",
+   "Client IP"
+  ],
+  "dc_host": [
+   "dest",
+   "host",
+   "ComputerName",
+   "Computer",
+   "dc_host",
+   "Domain Controller"
+  ],
+  "logon_type": [
+   "Logon_Type",
+   "LogonType",
+   "logon_type"
+  ]
  },
  "account_events": {
-  "time": ["_time", "event_time", "TimeCreated"],
-  "event_code": ["EventCode", "event_code", "EventID", "signature_id"],
-  "caller_host": ["Caller_Computer_Name", "CallerComputerName", "TargetDomainName", "caller_host"],
-  "actor": ["src_user", "SubjectUserName", "actor"]
+  "time": [
+   "_time",
+   "event_time",
+   "TimeCreated",
+   "Time",
+   "Event Time"
+  ],
+  "event_code": [
+   "EventCode",
+   "event_code",
+   "EventID",
+   "signature_id"
+  ],
+  "caller_host": [
+   "Caller_Computer_Name",
+   "CallerComputerName",
+   "TargetDomainName",
+   "caller_host",
+   "Caller Machine",
+   "Client Host Name"
+  ],
+  "actor": [
+   "src_user",
+   "SubjectUserName",
+   "actor"
+  ]
  },
  "entra_failures": {
-  "time": ["_time", "createdDateTime", "event_time"],
-  "error_code": ["status.errorCode", "properties.status.errorCode", "ResultType", "error_code"],
-  "client_app": ["clientAppUsed", "properties.clientAppUsed", "client_app"],
-  "app": ["appDisplayName", "properties.appDisplayName", "app"],
-  "src_ip": ["ipAddress", "properties.ipAddress", "callerIpAddress", "src_ip"]
- }
+  "time": [
+   "_time",
+   "createdDateTime",
+   "event_time",
+   "TimeGenerated"
+  ],
+  "error_code": [
+   "status.errorCode",
+   "properties.status.errorCode",
+   "ResultType",
+   "error_code"
+  ],
+  "client_app": [
+   "clientAppUsed",
+   "properties.clientAppUsed",
+   "client_app",
+   "ClientAppUsed"
+  ],
+  "app": [
+   "appDisplayName",
+   "properties.appDisplayName",
+   "app",
+   "AppDisplayName"
+  ],
+  "src_ip": [
+   "ipAddress",
+   "properties.ipAddress",
+   "callerIpAddress",
+   "src_ip",
+   "IPAddress"
+  ]
+ },
+ "account_fields": [
+  "account",
+  "user",
+  "Account",
+  "Account Name",
+  "TargetUserName",
+  "User Name",
+  "userPrincipalName",
+  "UserPrincipalName",
+  "upn"
+ ]
 }

@@ -29,7 +29,7 @@ def test_import_and_resolver_agree(tmp_path):
     assert [e["account"] for e in data["owners"]["E7001"]] == ["svc-app01", "da-e7001", "svc-notier"]   # deduplicated, lower-cased
     store = evidence.DictStore({"ownership/ownership.json": json.dumps(data)})
     names, meta = scope.resolve_scope_meta("E7001", store)
-    assert names == frozenset({"svc-app01", "svc-notier"}) and meta["svc-app01"] == "service"         # Tier 0 excluded
+    assert names == frozenset({"svc-app01", "svc-notier"}) and meta["svc-app01"]["type"] == "service"         # Tier 0 excluded
     with pytest.raises(scope.Denied) as e:                                                              # only account is deny-listed
         scope.resolve_scope("E7002", store)
     assert e.value.code == "scope_empty"
@@ -44,3 +44,11 @@ def test_missing_column_is_a_clear_error(tmp_path):
     with pytest.raises(SystemExit) as e:
         imp.main([str(src), "--out", str(tmp_path / "o.json"), "--owner-col", "Owner", "--account-col", "Account Name"])
     assert "column not found" in str(e.value)
+
+def test_sign_in_column_is_carried_and_validated_by_the_resolver(tmp_path):
+    src, out = tmp_path / "r.csv", tmp_path / "o.json"
+    src.write_text("Owner,Account,Sign-in Name\nE1,svc-a,SVC.A@Example.Test\nE1,svc-b,\nE1,svc-c,not a name\n")
+    assert imp.main([str(src), "--out", str(out), "--owner-col", "Owner", "--account-col", "Account", "--signin-col", "Sign-in Name"]) == 0
+    store = evidence.DictStore({"ownership/ownership.json": out.read_text()})
+    _, meta = scope.resolve_scope_meta("E1", store)
+    assert meta["svc-a"]["signin_name"] == "svc.a@example.test" and meta["svc-b"]["signin_name"] is None and meta["svc-c"]["signin_name"] is None

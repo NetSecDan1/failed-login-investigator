@@ -11,9 +11,9 @@ import scope
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 KINDS = ("failed_logins", "account_events", "entra_failures")
-ALLOWED = {"%s.%s" % (k, ext) for k in KINDS for ext in ("spl", "sql")}
+ALLOWED = {"%s.%s" % (k, ext) for k in KINDS for ext in ("spl", "sql")} | {"entra_failures.kql"}
 # Aggregate-only templates with no account in them. They return a count, never rows.
-HEALTH = {"source_health_%s.%s" % (k, ext) for k in ("windows", "entra") for ext in ("spl", "sql")}
+HEALTH = {"source_health_%s.%s" % (k, ext) for k in ("windows", "entra") for ext in ("spl", "sql")} | {"source_health_entra.kql"}
 SETTING_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,127}$")
 # Operator settings: template placeholder -> environment variable.
 SETTINGS = {"index_windows": "SPLUNK_INDEX_WINDOWS", "index_entra": "SPLUNK_INDEX_ENTRA",
@@ -51,22 +51,27 @@ def _window(start, end):
     return _utc(start), _utc(end)
 
 
-def render(name, account, start, end, scope_set):
+def render(name, account, start, end, scope_set, signin_name=None):
     """Return {"text": ..., "params": {...}} for one template. Raises scope.Denied when out of scope.
 
-    Splunk templates carry the account in the search text and the time bounds as request parameters
-    (epoch seconds). SQL templates carry everything as bound parameters.
+    Text templates carry the account in the query text and the time bounds as request parameters.
+    SQL templates carry everything as bound parameters. Cloud sign-in templates use {signin_name}: the
+    account's sign-in name from the ownership source when it has one, otherwise the account name.
     """
     if name not in ALLOWED:
         raise ValueError("unknown template")
     account = scope.check_account(account, scope_set)   # shape check and scope check, every time
+    signin = scope.signin_name(signin_name) or account  # both shapes are validated, neither can carry a quote
     s, e = _window(start, end)
     with open(os.path.join(template_dir(), name)) as f:
         text = _settings(f.read())
     if name.endswith(".sql"):
-        return {"text": text, "params": {"account": account, "start": s, "end": e}}
-    return {"text": text.replace("{account}", account),
-            "params": {"earliest_time": str(int(start.timestamp())), "latest_time": str(int(end.timestamp()))}}
+        params = {"account": account, "signin_name": signin, "start": s, "end": e}
+        return {"text": text, "params": {k: v for k, v in params.items() if (":" + k) in text}}
+    text = text.replace("{account}", account).replace("{signin_name}", signin)
+    if name.endswith(".kql"):
+        return {"text": text, "params": {"timespan": "%sZ/%sZ" % (s, e)}}
+    return {"text": text, "params": {"earliest_time": str(int(start.timestamp())), "latest_time": str(int(end.timestamp()))}}
 
 
 def render_health(name, start, end):
@@ -78,4 +83,6 @@ def render_health(name, start, end):
         text = _settings(f.read())
     if name.endswith(".sql"):
         return {"text": text, "params": {"start": s, "end": e}}
+    if name.endswith(".kql"):
+        return {"text": text, "params": {"timespan": "%sZ/%sZ" % (s, e)}}
     return {"text": text, "params": {"earliest_time": str(int(start.timestamp())), "latest_time": str(int(end.timestamp()))}}

@@ -53,7 +53,7 @@ def test_unknown_template_and_path_tricks_rejected():
 def test_every_template_has_a_row_cap():
     for name in querypack.ALLOWED:
         text = open(os.path.join(querypack.template_dir(), name)).read().lower()
-        assert "head " in text or "limit " in text, name
+        assert "head " in text or "limit " in text or "take " in text, name
 
 @pytest.mark.parametrize("bad", ["", "main | delete", "a b", "x\" OR index=*", "*", "idx;drop"])
 def test_operator_settings_must_be_plain_identifiers(monkeypatch, bad):

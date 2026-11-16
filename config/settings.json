@@ -64,8 +64,50 @@
   {
    "name": "EVIDENCE_BACKEND",
    "default": "file",
-   "purpose": "file (synthetic), splunk or databricks.",
+   "purpose": "Default evidence source for every kind: file (synthetic), none, splunk, databricks, export, graph or loganalytics.",
    "production": "must not be file"
+  },
+  {
+   "name": "EVIDENCE_SOURCES",
+   "default": "",
+   "purpose": "Per-kind overrides of the default, such as failed_logins=splunk,entra_failures=graph. Kinds: failed_logins, account_events, entra_failures.",
+   "production": "no kind may resolve to file"
+  },
+  {
+   "name": "EXPORT_PREFIX",
+   "default": "exports",
+   "purpose": "Folder in the data bucket where scheduled report exports land, for the export source.",
+   "production": null
+  },
+  {
+   "name": "ENTRA_TENANT_ID",
+   "default": "",
+   "purpose": "Cloud identity tenant, for the graph and loganalytics sources.",
+   "production": "required for graph or loganalytics"
+  },
+  {
+   "name": "ENTRA_CLIENT_ID",
+   "default": "",
+   "purpose": "Read-only application identity used by the graph and loganalytics sources.",
+   "production": "required for graph or loganalytics"
+  },
+  {
+   "name": "ENTRA_CLIENT_SECRET_ARN",
+   "default": "",
+   "purpose": "Secret holding that application's credential.",
+   "production": "required for graph or loganalytics"
+  },
+  {
+   "name": "ENTRA_CLIENT_SECRET",
+   "default": "",
+   "purpose": "Plain credential. Local runs only.",
+   "production": "must be empty"
+  },
+  {
+   "name": "LOGANALYTICS_WORKSPACE_ID",
+   "default": "",
+   "purpose": "Log workspace holding the sign-in tables, for the loganalytics source.",
+   "production": "required for loganalytics"
   },
   {
    "name": "SOURCE_HEALTH_CHECK",

@@ -113,20 +113,30 @@ def secret_from_env(arn_var, plain_var):
 
 # ---------- backends ----------
 
-class Backend:
-    name = "base"
+class NoSigninName(LookupError):
+    """The source needs the account's cloud sign-in name and the ownership source did not give one."""
 
-    def fetch(self, kind, account, start, end, scope_set):
+
+class Backend:
+    """One evidence source. Subclasses implement fetch and health_counts. See docs/SOURCES.md for the contract."""
+    name = "base"
+    kinds = ("failed_logins", "account_events", "entra_failures")     # what this source can answer
+
+    def fetch(self, kind, account, start, end, scope_set, signin_name=None):
         raise NotImplementedError
 
-    def query(self, kind, account, start, end, scope_set):
+    def query(self, kind, account, start, end, scope_set, signin_name=None):
         if account not in scope_set:                  # re-check inside every tool, before any I/O
             raise scope.Denied("out_of_scope", "You can only investigate accounts you own.")
         qid = "%s:%s:%s" % (self.name, kind, account)
+        if kind not in self.kinds:
+            return {"query_id": qid, "rows": [], "truncated": False, "error": "source_not_configured"}
         try:
-            rows, note = self.fetch(kind, account, start, end, scope_set)
+            rows, note = self.fetch(kind, account, start, end, scope_set, scope.signin_name(signin_name))
         except scope.Denied:
             raise
+        except NoSigninName:
+            return {"query_id": qid, "rows": [], "truncated": False, "error": "no_cloud_signin_name_for_account"}
         except Exception as e:                        # never crash the pipeline on a source problem
             return {"query_id": qid, "rows": [], "truncated": False, "error": "source_unavailable",
                     "error_detail": "%s: %s" % (type(e).__name__, str(e)[:200])}
@@ -146,6 +156,9 @@ class Backend:
         for source in ("windows", "entra"):
             try:
                 counts = self.health_counts(source, start, end)
+                if counts == "not_configured":
+                    out[source] = "not_configured"
+                    continue
                 out[source] = {"events": int(counts["events"]),
                                "reporting_hosts": int(counts["reporting_hosts"]) if counts.get("reporting_hosts") is not None else None}
             except Exception:
@@ -159,13 +172,13 @@ class FileBackend(Backend):
     def __init__(self, store):
         self.store = store
 
-    def query(self, kind, account, start, end, scope_set):
-        out = super().query(kind, account, start, end, scope_set)
+    def query(self, kind, account, start, end, scope_set, signin_name=None):
+        out = super().query(kind, account, start, end, scope_set, signin_name)
         out["query_id"] = "file:evidence/%s.json#%s" % (account, kind)
         out["truncated"] = len(out["rows"]) > ROW_CAP[kind]
         return out
 
-    def fetch(self, kind, account, start, end, scope_set):
+    def fetch(self, kind, account, start, end, scope_set, signin_name=None):
         rows = json.loads(self.store.get("evidence/%s.json" % account)).get(kind)
         if rows is None:
             return [], "source_missing"
@@ -205,8 +218,8 @@ class SplunkBackend(Backend):
                 raw.append(obj["result"])
         return raw
 
-    def fetch(self, kind, account, start, end, scope_set):
-        raw = self._export(querypack.render(kind + ".spl", account, start, end, scope_set))
+    def fetch(self, kind, account, start, end, scope_set, signin_name=None):
+        raw = self._export(querypack.render(kind + ".spl", account, start, end, scope_set, signin_name))
         rows, dropped = normalize(kind, raw, self.field_map)
         return rows, ("rows_dropped_no_time:%d" % dropped if dropped else None)
 
@@ -229,7 +242,7 @@ class DatabricksBackend(Backend):
         self.field_map = field_map or load_field_map()
 
     def _statement(self, q):
-        types = {"account": "STRING", "start": "TIMESTAMP", "end": "TIMESTAMP"}
+        types = {"account": "STRING", "signin_name": "STRING", "start": "TIMESTAMP", "end": "TIMESTAMP"}
         payload = {"statement": q["text"], "warehouse_id": self.warehouse, "wait_timeout": "50s",
                    "on_wait_timeout": "CANCEL", "format": "JSON_ARRAY", "disposition": "INLINE",
                    "parameters": [{"name": k, "value": v, "type": types[k]} for k, v in q["params"].items()]}
@@ -246,8 +259,8 @@ class DatabricksBackend(Backend):
         raw = [dict(zip(cols, r, strict=False)) for r in (resp.get("result") or {}).get("data_array") or []]
         return raw, bool(resp["manifest"].get("truncated"))
 
-    def fetch(self, kind, account, start, end, scope_set):
-        raw, truncated = self._statement(querypack.render(kind + ".sql", account, start, end, scope_set))
+    def fetch(self, kind, account, start, end, scope_set, signin_name=None):
+        raw, truncated = self._statement(querypack.render(kind + ".sql", account, start, end, scope_set, signin_name))
         rows, dropped = normalize(kind, raw, self.field_map)
         note = "rows_dropped_no_time:%d" % dropped if dropped else None
         return rows, ("truncated_by_source" if truncated else note)
@@ -260,12 +273,5 @@ class DatabricksBackend(Backend):
 
 
 def make_backend(store):
-    kind = os.environ.get("EVIDENCE_BACKEND", "file").lower()
-    if kind == "file":
-        return FileBackend(store)
-    if kind == "splunk":
-        return SplunkBackend(os.environ["SPLUNK_BASE_URL"], secret_from_env("SPLUNK_TOKEN_SECRET_ARN", "SPLUNK_TOKEN"))
-    if kind == "databricks":
-        return DatabricksBackend(os.environ["DATABRICKS_HOST"], os.environ["DATABRICKS_WAREHOUSE_ID"],
-                                 secret_from_env("DATABRICKS_TOKEN_SECRET_ARN", "DATABRICKS_TOKEN"))
-    raise ValueError("unknown EVIDENCE_BACKEND")
+    import adapters
+    return adapters.make_backend(store)

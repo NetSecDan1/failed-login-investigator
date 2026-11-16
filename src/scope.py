@@ -38,8 +38,21 @@ def _check_fresh(export):
         raise Denied("ownership_stale", "Ownership data is out of date. Try again later.")
 
 
+SIGNIN_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}@[a-z0-9][a-z0-9.-]{0,189}$")
+
+
+def signin_name(value):
+    """A cloud sign-in name in user@domain form, lower-cased, or None when absent or not well formed."""
+    value = str(value or "").strip().lower()
+    return value if SIGNIN_RE.fullmatch(value) else None
+
+
 def resolve_scope_meta(caller, store):
-    """Return (frozenset of owned account names, {name: account type}). Any error or empty result denies."""
+    """Return (frozenset of owned account names, {name: {"type", "signin_name"}}). Any error or empty result denies.
+
+    signin_name is the name the cloud identity provider knows the account by, when the ownership source gives
+    one. It comes from the ownership source only, never from a request.
+    """
     try:
         export = json.loads(store.get("ownership/ownership.json"))
         owners = {str(k).lower(): v for k, v in export["owners"].items()}
@@ -55,7 +68,7 @@ def resolve_scope_meta(caller, store):
         name = str(a.get("account", "")).lower()
         if name in tier0 or name in deny or not ACCOUNT_RE.fullmatch(name):
             continue
-        meta[name] = a.get("type")
+        meta[name] = {"type": a.get("type"), "signin_name": signin_name(a.get("signin_name"))}
     if not meta:
         raise Denied("scope_empty", "No owned accounts found for you.")
     return frozenset(meta), meta

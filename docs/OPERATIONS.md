@@ -87,7 +87,7 @@ Because the agent changes nothing in any identity system, there is no data to ro
 | Symptom | Likely cause | Action |
 |---------|--------------|--------|
 | Every caller gets `ownership_unavailable` or `ownership_stale` | Ownership file missing, unreadable or older than `OWNERSHIP_MAX_AGE_HOURS` | Fix the export. Do not raise the limit to make the error go away |
-| Reports list a source under gaps | Log platform unreachable, token expired, or field map mismatch | See `source_errors` in the audit line, then `docs/BACKENDS.md` |
+| Reports list a source under gaps | Log platform unreachable, token expired, or field map mismatch | See `source_errors` in the audit line, then `docs/SOURCES.md` |
 | `summary_withheld:guardrail_intervened` on ordinary requests | Guardrail too broad | Review the guardrail trace and tune the topic definition |
 | A report looks wrong | Skill thresholds or wording | Capture the case as a synthetic eval, fix the skill, re-run evals |
 
