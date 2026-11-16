@@ -18,6 +18,8 @@ this repository. `docs/STATUS.md` is the record of what is and is not evidenced.
 - This repository offers a standard agent framework on a managed agent runtime (`agent/`), a model route setting
   that can point at a central model gateway (`src/modelroute.py`), and a simpler function deployment (`src/`).
   Which of these an organization permits is an owner decision. Record it in `docs/STATUS.md`, do not assume it.
+- The production path is the managed agent runtime with the governed model route, enforced by `src/stage.py`.
+  Never loosen a stage rule, and never set an exception setting to make a test or a deployment pass.
 - Use approved models, libraries and services. When something is unclear, write the question down and name
   who must answer it. Never silently substitute a tool or pattern.
 

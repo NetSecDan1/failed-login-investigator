@@ -70,6 +70,16 @@ flowchart TD
 
 The pipeline, skills, validator, tests and gates are shared. Choosing a shape is an owner decision, not a code change.
 
+## Deployment stage
+
+Before identity, data or model, `src/stage.py` checks that the running configuration is one that may run:
+synthetic data only in `development`, live evidence only with the governed model route or no model, and in
+`production` only the managed agent runtime. Approved departures are recorded by reference and written to the
+audit line. A configuration that breaks a rule returns `not_permitted` to every request.
+
+Denials for an account the caller may not see are identical whether the account is owned by someone else, does
+not exist or is malformed. The response contract has one reason for all three, `out_of_scope`.
+
 ## Failure behavior
 
 | Failure | Result |

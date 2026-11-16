@@ -2,10 +2,10 @@
 
 The record of what is and is not evidenced. Update it with every change.
 
-**Built for enterprise use and verified end to end on synthetic data.** Live identity, ownership, evidence and
-model integrations are connected per environment by their owners, and adoption into an organization's standard
-path is that organization's decision, recorded here when it is made. Every test in this repository uses generated
-data and scripted stand-ins unless a line below says "live".
+**Maturity: pre-production.** Designed and tested to enterprise standards on synthetic data. It has not had a
+security review and must not be used with real data until it has. The code enforces this: the default stage
+accepts synthetic data only. Every test in this repository uses generated data and scripted stand-ins unless
+a line below says "live". What an adopting organization's own path must show is in `docs/ADOPTION.md`.
 
 Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemented**, **Needs owner confirmation**.
 
@@ -19,7 +19,9 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Authority | Model output validated against evidence and a schema, with a safe fallback | Implemented and evidenced | `tests/test_pipeline.py`. Scripted model only |
 | Supported path | Standard agent framework on a managed agent runtime | Partially implemented | `agent/app.py`, `tests/test_agent.py` with a scripted model. CI builds the image, checks it runs as a non-root user and refuses an unverified request. Not deployed to a runtime. Whether this matches an adopting organization's template: **Needs owner confirmation** |
 | Supported path | Model access through an approved route | Partially implemented | `src/modelroute.py` supports direct and central-gateway routes. Gateway tested against fake responses only. Which route is approved: **Needs owner confirmation** |
-| Supported path | Organization template, repository structure and shared pipelines | Not implemented | This repository uses its own layout and workflows |
+| Supported path | The production path is named and enforced | Implemented and evidenced | `src/stage.py`: development is synthetic only, live evidence requires the governed model route or no model, production requires the managed agent runtime. Departures need an approval reference, written to every audit line (`tests/test_stage.py`, preflight). Synthetic. The guard prevents the wrong shape by accident, it does not grant an approval |
+| Boundaries | A caller cannot tell an unowned account from a nonexistent or malformed one | Implemented and evidenced | One identical public answer and HTTP status for all three, precise reason in the audit line only (`tests/test_stage.py`) |
+| Supported path | Organization template, repository structure, shared delivery workflow, deployment platform, required scanners and attestations | Not implemented | This repository uses its own layout and workflows as stand-ins. `docs/ADOPTION.md` lists each item and the evidence the organization's own systems must produce |
 | Identity | Real-token authentication | Partially implemented | Authorizer configuration in `template.yaml`, in-application verification in `agent/identity.py`, tested with locally generated keys. No real identity provider token has been used |
 | Identity | Live ownership enforcement | Partially implemented | CSV import, freshness check, most-restrictive conflict rule (`tests/test_operations.py`, `tests/test_import_ownership.py`). No live ownership source |
 | Data | Evidence from real sources, pluggable and routed per kind | Partially implemented | `src/adapters.py`: adapters for a log platform, a lakehouse, scheduled report exports and two cloud sign-in sources, plus per-kind routing, ordered source lists and operator switches that can only turn a source off. A shared contract suite runs against every adapter (`tests/test_adapters.py`). Fake transport only. No adapter has run live |
@@ -35,7 +37,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Delivery | Software bill of materials and image vulnerability scan | Implemented and evidenced | CI produces a CycloneDX bill of materials for the agent and scans the image with a digest-pinned scanner, blocking on fixable high and critical findings. The first scan found 7 high findings: fixed by taking base image updates, patched constraints, and removing the package installer from the image. No signed provenance |
 | Delivery | An adopting organization's required scanners, attestations and release gates | Needs owner confirmation | Not wired in. The CI jobs are stand-ins to be mapped to the required tools |
 | Evaluation | Golden inputs and answers | Partially implemented | 15 synthetic cases, scored in CI with a scripted stand-in model (`tools/run_evals.py`). **No live model evaluation has been run** |
-| Evaluation | Adversarial evaluation of model behavior | Partially implemented | `tools/redteam.py`: 21 scripted hostile models and 4 hostile switch files, all contained, run in CI. Shows the controls hold, not how a real model behaves |
+| Evaluation | Adversarial evaluation of model behavior | Partially implemented | `tools/redteam.py`: 21 scripted hostile models, 4 hostile switch files and 5 configurations that must refuse to run, all contained, run in CI. Shows the controls hold, not how a real model behaves |
 | Evaluation | Business-impact testing and ongoing evaluation | Not implemented | Needs a pilot and a baseline |
 | Operations | Audit logging without sensitive content | Implemented and evidenced | `tests/test_operations.py`. Retention and access: **Needs owner confirmation** |
 | Operations | Metrics, alarms, limits, kill switch | Partially implemented | Code and template tested and linted. Alarms not deployed. Kill switch not exercised live |
@@ -72,9 +74,9 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 
 ## Tests run for this revision
 
-`python -m pytest -q --cov=src --cov=agent tests` (295 tests including property, contract and adapter tests, 95%
+`python -m pytest -q --cov=src --cov=agent tests` (312 tests including property, contract and adapter tests, 95%
 coverage), `python tools/run_evals.py` (15 of 15 golden cases, scripted stand-in model), `python tools/redteam.py`
-(25 of 25 attacks contained), `ruff check .`, `bandit -r src agent integrations`, `pip-audit` on every pinned
+(30 of 30 attacks contained), `ruff check .`, `bandit -r src agent integrations`, `pip-audit` on every pinned
 requirements file, `cfn-lint template.yaml infra/github-oidc.yaml`, and in CI an agent image build, smoke test
 and vulnerability scan. All offline or against a locally built image. See the CI run for the commit.
 

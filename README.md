@@ -6,10 +6,10 @@ It answers one question well: *"this account keeps failing or locking out, why?"
 sign-in evidence for accounts the caller owns, works out the facts in code, and uses a model only to choose among
 explanations the evidence already supports and to write them up in plain language.
 
-**Status:** built for enterprise use. It is read-only and least-privilege, every control is enforced in code, and
-every push is tested against those controls. It is verified end to end on synthetic data. Live identity,
-ownership, evidence and model integrations are connected per environment by their owners.
-[`docs/STATUS.md`](docs/STATUS.md) tracks each requirement and the evidence behind it.
+**Maturity: pre-production.** Designed and tested to enterprise standards on synthetic data. It has not had a
+security review and must not be used with real data until it has. The code enforces this: the default stage
+accepts synthetic data only. [`docs/STATUS.md`](docs/STATUS.md) tracks each requirement and the evidence
+behind it, and [`docs/ADOPTION.md`](docs/ADOPTION.md) lists what an adopting organization's own path must show.
 
 ## What a caller gets
 
@@ -39,7 +39,8 @@ flag when the pattern needs the security team. Without a model, the facts above 
 - **Read-only.** No write path exists to any identity, directory or log system. The workload role allows reads on
   its own bucket, model invocation and its own logs, with an explicit deny on everything else.
 - **Ownership decides scope.** The caller's accounts come from the identity governance source on every request,
-  and every read tool checks scope again before any I/O. Unowned and nonexistent accounts get the same answer.
+  and every read tool checks scope again before any I/O. An account that is unowned, nonexistent or malformed gets
+  one identical answer. Only the audit line records which it was.
 - **Code holds the authority.** Identity, scope, retrieval, every number, skill eligibility, escalation and next
   steps are deterministic code. The model has no tools and cannot fetch data.
 - **The model is bounded.** It picks one skill from a list code already found eligible, and writes a narrative
@@ -108,17 +109,30 @@ python tools/investigate.py --caller E5000 --account ev-legacy --model <model-id
 | Command line, pipeline, HTTP API with token authorizer | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
 | Editor workspace with assistant chat | [`docs/VSCODE.md`](docs/VSCODE.md) |
 
-It runs in two shapes on the same pipeline, and in both the reply is rendered by code from validated results.
+**The production path is the managed agent runtime, on a standard agent framework, with the model reached through
+the governed gateway.** The function shape is for development and evaluation. Both run the same pipeline, and in
+both the reply is rendered by code from validated results.
 
-| | Function behind an HTTP API | Managed agent runtime |
+| | Managed agent runtime (production path) | Function behind an HTTP API (development) |
 |---|---|---|
-| Code | `src/handler.py`, `template.yaml` | `agent/app.py`, `agent/Dockerfile` |
-| Input | Typed request: account and window | Typed request, or a sentence that a routing model maps to one of two typed tools |
-| Model use | One call to explain, one retry at most | The same, plus a small routing call for free-text requests |
+| Code | `agent/app.py`, `agent/Dockerfile` | `src/handler.py`, `template.yaml` |
+| Input | Typed request, or a sentence that a routing model maps to one of two typed tools | Typed request: account and window |
+| Model use | One call to explain, one retry at most, plus a small routing call for free-text requests | One call to explain, one retry at most |
 
-The model is reached through `MODEL_ROUTE`: a direct call, or a central model gateway. Every setting, with its
-production rule, is in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md), and `python tools/preflight.py` checks a
-configuration before it ships.
+This is enforced in code by `DEPLOYMENT_STAGE` (`src/stage.py`), and a configuration that breaks a rule refuses
+every request:
+
+| Stage | Evidence | Model route | Shape |
+|-------|----------|-------------|-------|
+| `development` (default) | Synthetic only | Any | Any |
+| `integration` | Live sources allowed, for first contact | Gateway or off | Any |
+| `production` | Live sources only | Gateway or off | Managed agent runtime |
+
+A direct model call with live evidence, or the function shape in production, needs an owner's approval recorded
+by reference in `MODEL_ROUTE_EXCEPTION` or `FUNCTION_RUNTIME_EXCEPTION`. The reference is written to every audit
+line while it is in use. Every setting, with its production rule, is in
+[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md), and `python tools/preflight.py` checks a configuration before
+it ships.
 
 ## Quality gates
 

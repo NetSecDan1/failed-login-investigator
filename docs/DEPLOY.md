@@ -142,6 +142,13 @@ Status codes: 200 ok, 400 bad input, 401 no verified caller, 403 not yours or no
 
 Real evidence sources are covered in [`SOURCES.md`](SOURCES.md).
 
+## Deployment stage
+
+Every option above deploys in the `development` stage, which accepts synthetic data only. Connecting a live source
+needs `DeploymentStage=integration` and `ModelRoute=gateway` or `off`. `production` is for the managed agent
+runtime in Option E. Running the function shape in production, or calling the model directly with live evidence,
+needs an owner's approval recorded in `FunctionRuntimeException` or `ModelRouteException`. See `src/stage.py`.
+
 ## Before a real deployment: preflight
 
 ```bash

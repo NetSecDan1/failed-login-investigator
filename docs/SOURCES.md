@@ -133,6 +133,7 @@ environment: it checks that each routed source has what it needs and that no kin
    falls through to the status.
 4. **Try it from a workstation on the network** before deploying anything:
    ```bash
+   export DEPLOYMENT_STAGE=integration MODEL_ROUTE=off       # live evidence, no model: facts only
    export EVIDENCE_BACKEND=<source> ...its settings...
    python tools/investigate.py --caller <you> --account <an account you own> --hours 24 --show-audit
    ```
