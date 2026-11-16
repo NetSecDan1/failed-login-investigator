@@ -139,8 +139,8 @@ environment: it checks that each routed source has what it needs and that no kin
    Ownership still comes from `data/ownership/ownership.json` here, so add yourself to it for the test.
 5. **Check the result against the raw query.** Counts, top host, first and last seen must match. Then check `gaps`
    and the audit line for `source_errors` and `rows_dropped_no_time`.
-6. **Check coverage and lag.** Confirm every domain controller forwards 4771, 4776 and 4740, and that the newest
-   row in the source is recent.
+6. **Check coverage and lag.** Confirm every domain controller forwards 4771, 4776 and 4740, then run
+   `python tools/check_sources.py` and set `SOURCE_MAX_LAG_MINUTES` from what it measures.
 
 ## Source health check
 
@@ -153,6 +153,27 @@ hosts. The query contains no account and returns a count, never rows.
 - The check itself fails: the report says collection could not be checked.
 - A kind routed to `none` is reported once as not configured.
 - `SOURCE_HEALTH_CHECK=false` turns the check off.
+
+### How far behind a source is running
+
+The same aggregate question also asks for the time of the newest event the source holds. The report records how
+many minutes that trails the end of the window, or the clock when the window ends in the future, as
+`lag_minutes` under `source_health`, and the audit line carries it as `source_lag_minutes`.
+
+Lockout questions are asked while the lockout is happening, so a source that runs hours behind will answer
+"nothing found" to a real problem. Set `SOURCE_MAX_LAG_MINUTES` and any source further behind than that is listed
+under gaps with the measured figure. The default of 0 measures without judging, because the right limit depends
+on the source: a busy log platform should trail by minutes, a batch pipeline by its schedule.
+
+Measure before choosing a limit, and before trusting a source for live triage:
+
+```bash
+python tools/check_sources.py --hours 24
+```
+
+It asks each configured source only for aggregate activity, never for an account's events, and prints the state,
+event count, reporting hosts and lag for each. Run it a few times across a day, including just after the busiest
+hour, and record the worst lag you see.
 
 Time bounds are sent as request parameters or bound parameters, never written into query text.
 

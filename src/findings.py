@@ -94,7 +94,14 @@ def _share(counter, group, total):
     return round(sum(v for k, v in counter.items() if k in group) / total, 2)
 
 
-def compute(account, start, end, pack, account_type=None, health=None, expected_hosts=0):
+def lag_minutes(newest, end, now=None):
+    """How far the newest event a source holds trails the end of the window, or the clock if the window ends later."""
+    ref = min(end, now) if now else end
+    seen = datetime.fromisoformat(newest.replace("Z", "+00:00"))
+    return max(0, int((ref - seen).total_seconds() // 60))
+
+
+def compute(account, start, end, pack, account_type=None, health=None, expected_hosts=0, max_lag_minutes=0, now=None):
     fl, ev, en = pack["failed_logins"], pack["account_events"], pack["entra_failures"]
     rows = fl["rows"]
     gaps = ["%s: %s" % (k, pack[k]["error"]) for k in ("failed_logins", "account_events", "entra_failures")
@@ -105,6 +112,7 @@ def compute(account, start, end, pack, account_type=None, health=None, expected_
     # A source that collected nothing for anyone looks the same as a clean account, so say so.
     silent = None
     if health is not None:
+        health = {k: (dict(v) if isinstance(v, dict) else v) for k, v in health.items()}
         silent = 0
         for source, what in (("windows", "directory logon events"), ("entra", "cloud sign-in events")):
             h = health.get(source)
@@ -117,6 +125,11 @@ def compute(account, start, end, pack, account_type=None, health=None, expected_
                 gaps.append("%s: the source holds no events from anyone in this window, collection may be broken" % what)
             elif source == "windows" and expected_hosts and h["reporting_hosts"] is not None and h["reporting_hosts"] < expected_hosts:
                 gaps.append("%s: %d of %d expected domain controllers reported in this window" % (what, h["reporting_hosts"], expected_hosts))
+            if isinstance(h, dict) and h.get("newest") and h["events"]:
+                h["lag_minutes"] = lag_minutes(h["newest"], end, now)
+                if max_lag_minutes and h["lag_minutes"] > max_lag_minutes:
+                    gaps.append("%s: the newest event in the source is %d minutes behind the end of this window, recent activity may be missing"
+                                % (what, h["lag_minutes"]))
 
     hosts = Counter(host(r.get("src_host")) for r in rows)
     ips = Counter(ip_text(r.get("src_ip")) for r in rows if r.get("src_ip"))

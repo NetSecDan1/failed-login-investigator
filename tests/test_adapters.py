@@ -180,7 +180,7 @@ def test_export_reads_scheduled_files_for_one_account_inside_the_window():
     assert cloud["rows"][0]["client_app"] == "IMAP4"
     assert b.query("entra_failures", "svc-batch01", T0, T1, S, None)["rows"] == []        # no sign-in name, no match
     assert b.query("account_events", "svc-batch01", T0, T1, S)["error"] == "source_missing"
-    assert b.health(T0, T1) == {"windows": {"events": 2, "reporting_hosts": 2}, "entra": {"events": 1, "reporting_hosts": None}}
+    assert b.health(T0, T1) == {"windows": {"events": 2, "reporting_hosts": 2, "newest": "2026-11-12T09:06:00Z"}, "entra": {"events": 1, "reporting_hosts": None, "newest": "2026-11-12T13:05:00Z"}}
 
 
 def test_export_refuses_oversized_files_and_reads_json_arrays():
@@ -416,3 +416,71 @@ def test_the_audit_line_records_which_source_was_passed_over(capsys):
     audit = json.loads(line[6:])
     assert audit["sources_passed_over"] == {"entra_failures": ["loganalytics:source_unavailable"]}
     assert audit["query_ids"][2].startswith("graph:")
+
+
+# ---------- how far behind a source is running ----------
+
+def health_of(name, answers):
+    return make(name, Net(answers)).health(T0, T1)
+
+
+def test_every_live_source_reports_its_newest_event():
+    lines = lambda *rows: "\n".join(json.dumps({"result": r}) for r in rows).encode()
+    assert health_of("splunk", {"/export": lines({"events": "900", "reporting_hosts": "3", "newest": "1794502800"})})["windows"] == {
+        "events": 900, "reporting_hosts": 3, "newest": "2026-11-12T17:00:00Z"}
+    la = {"tables": [{"columns": [{"name": "events"}, {"name": "newest"}], "rows": [[12, "2026-11-12T17:40:00Z"]]}]}
+    assert health_of("loganalytics", {"/query": la})["entra"] == {"events": 12, "reporting_hosts": None, "newest": "2026-11-12T17:40:00Z"}
+    net = Net({"/signIns": {"value": [dict(SIGNIN, createdDateTime="2026-11-12T17:58:00Z")]}})
+    assert make("graph", net).health(T0, T1)["entra"]["newest"] == "2026-11-12T17:58:00Z"
+    assert "orderby=createdDateTime+desc" in net.data_calls()[-1]["url"].replace("%24", "").replace("%20", "+")
+    assert make("export", Net()).health(T0, T1)["windows"]["newest"] == "2026-11-12T09:06:00Z"
+
+
+def test_a_newest_time_that_makes_no_sense_is_dropped_not_trusted():
+    lines = lambda *rows: "\n".join(json.dumps({"result": r}) for r in rows).encode()
+    for junk in ("soon", "99999999999999999", "0999-01-01T00:00:00Z", ""):
+        h = health_of("splunk", {"/export": lines({"events": "5", "reporting_hosts": "1", "newest": junk})})["windows"]
+        assert h == {"events": 5, "reporting_hosts": 1}
+
+
+def lagging(newest, max_lag, end=T1, now=None):
+    import findings
+    pack = {k: {"query_id": "q:" + k, "rows": [], "truncated": False} for k in ("failed_logins", "account_events", "entra_failures")}
+    pack["query_ids"] = ["q:a", "q:b", "q:c"]
+    health = {"windows": {"events": 500, "reporting_hosts": 3, "newest": "2026-11-12T17:58:00Z"},
+              "entra": {"events": 40, "reporting_hosts": None, "newest": newest}}
+    return findings.compute("svc-batch01", T0, end, pack, "service", health, 0, max_lag, now), health
+
+
+def test_a_source_running_behind_is_measured_and_called_out_past_the_limit():
+    facts, original = lagging("2026-11-12T14:53:00Z", 60)
+    assert facts["source_health"]["entra"]["lag_minutes"] == 187 and facts["source_health"]["windows"]["lag_minutes"] == 2
+    assert facts["gaps"] == ["cloud sign-in events: the newest event in the source is 187 minutes behind the end of this window, recent activity may be missing"]
+    assert "lag_minutes" not in original["entra"]                              # the caller's health record is not edited
+    assert lagging("2026-11-12T14:53:00Z", 0)[0]["gaps"] == []                 # 0 measures without judging
+    assert lagging("2026-11-12T14:53:00Z", 240)[0]["gaps"] == []
+
+
+def test_lag_is_measured_against_the_clock_when_the_window_ends_in_the_future():
+    now = T1 - timedelta(hours=3)                                              # window end is ahead of the clock
+    facts, _ = lagging("2026-11-12T14:53:00Z", 60, now=now)
+    assert facts["source_health"]["entra"]["lag_minutes"] == 7 and facts["gaps"] == []
+
+
+def test_the_source_check_tool_reports_state_and_lag(capsys):
+    import importlib.util, os
+    spec = importlib.util.spec_from_file_location("check_sources", os.path.join(os.path.dirname(__file__), "..", "tools", "check_sources.py"))
+    cs = importlib.util.module_from_spec(spec); spec.loader.exec_module(cs)
+
+    class Fake(backends.Backend):
+        def __init__(self, out):
+            self.out = out
+        def health(self, start, end):
+            return self.out
+    now = datetime(2026, 11, 12, 18, tzinfo=timezone.utc)
+    rows = cs.measure(Fake({"windows": {"events": 9, "reporting_hosts": 2, "newest": "2026-11-12T17:30:00Z"}, "entra": "not_configured"}), 24, now)
+    assert rows[0]["lag_minutes"] == 30 and rows[0]["state"] == "ok" and rows[1]["state"] == "not_configured"
+    assert cs.main(["--hours", "6"], backend=Fake({"windows": {"events": 0, "reporting_hosts": 0}, "entra": None})) == 1
+    out = capsys.readouterr().out
+    assert "no_events" in out and "could_not_check" in out
+    assert cs.main(["--json"], backend=Fake({"windows": {"events": 3, "reporting_hosts": 1}, "entra": "not_configured"})) == 0

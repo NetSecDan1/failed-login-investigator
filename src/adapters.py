@@ -222,7 +222,8 @@ class ExportBackend(Backend):
         raw, _ = self._raw(kind, start, end)
         rows = self._in_window(normalize(kind, raw, self.field_map)[0], start, end)
         hosts = {r.get("dc_host") for r in rows if r.get("dc_host")}
-        return {"events": len(rows), "reporting_hosts": len(hosts) if source == "windows" else None}
+        return {"events": len(rows), "reporting_hosts": len(hosts) if source == "windows" else None,
+                "newest": max((r["time"] for r in rows), default=None)}
 
 
 class _ClientCredentials:
@@ -286,8 +287,11 @@ class GraphSignInBackend(Backend):
             raise RuntimeError("sign-in log API http %s" % status)
         return json.loads(data)
 
-    def _url(self, flt, top):
-        return self.base + "/v1.0/auditLogs/signIns?" + urllib.parse.urlencode({"$filter": flt, "$top": str(top)})
+    def _url(self, flt, top, newest_first=False):
+        params = {"$filter": flt, "$top": str(top)}
+        if newest_first:
+            params["$orderby"] = "createdDateTime desc"
+        return self.base + "/v1.0/auditLogs/signIns?" + urllib.parse.urlencode(params)
 
     def fetch(self, kind, account, start, end, scope_set, signin_name=None):
         if not signin_name:
@@ -312,7 +316,8 @@ class GraphSignInBackend(Backend):
         if source != "entra":
             raise NotImplementedError
         flt = "createdDateTime ge %sZ and createdDateTime lt %sZ" % (querypack._utc(start), querypack._utc(end))
-        return {"events": len(self._get(self._url(flt, 1)).get("value", [])), "reporting_hosts": None}
+        rows = [r for r in self._get(self._url(flt, 1, newest_first=True)).get("value", []) if isinstance(r, dict)]
+        return {"events": len(rows), "reporting_hosts": None, "newest": rows[0].get("createdDateTime") if rows else None}
 
 
 class LogAnalyticsBackend(Backend):
@@ -356,7 +361,8 @@ class LogAnalyticsBackend(Backend):
         if source != "entra":
             raise NotImplementedError
         raw = self._run(querypack.render_health("source_health_entra.kql", start, end))
-        return {"events": int(float((raw[0] if raw else {}).get("events") or 0)), "reporting_hosts": None}
+        row = raw[0] if raw else {}
+        return {"events": int(float(row.get("events") or 0)), "reporting_hosts": None, "newest": row.get("newest")}
 
 
 # ---------- registry ----------

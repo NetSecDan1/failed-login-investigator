@@ -24,6 +24,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Identity | Live ownership enforcement | Partially implemented | CSV import, freshness check, most-restrictive conflict rule (`tests/test_operations.py`, `tests/test_import_ownership.py`). No live ownership source |
 | Data | Evidence from real sources, pluggable and routed per kind | Partially implemented | `src/adapters.py`: adapters for a log platform, a lakehouse, scheduled report exports and two cloud sign-in sources, plus per-kind routing, ordered source lists and operator switches that can only turn a source off. A shared contract suite runs against every adapter (`tests/test_adapters.py`). Fake transport only. No adapter has run live |
 | Data | Cloud sign-in evidence path chosen | Needs owner confirmation | `docs/SOURCES.md` lays out five paths with their freshness and credential tradeoffs. The workspace query and the sign-in log API are both built and can run as an ordered pair, each switchable at run time. Until a path is sanctioned the cloud kind is routed to `none` or switched off, and every report states the gap |
+| Data | A source running behind is measured and called out | Partially implemented | Newest-event time from every live adapter, lag in each report and audit line, optional limit, and `tools/check_sources.py` to measure it (`tests/test_adapters.py`). Fake transport only. The newest-event queries have not run against a live source |
 | Operations | A single evidence source can be turned off without a deployment | Partially implemented | Setting and switch file, fail toward off (`tests/test_adapters.py`, `tools/redteam.py`). Not exercised against a live bucket |
 | Data | Silent or partial log collection is detected | Partially implemented | Source activity count and expected reporting hosts (`tests/test_backends.py`). Fake transport only. The aggregate queries have not run against a live source |
 | Authority | Narrative cannot carry invented numbers, times, dates or unsafe advice | Implemented and evidenced | `tests/test_narrative_gate.py`, `tools/redteam.py`. Scripted models only. The unsafe-advice list is pattern based |
@@ -71,7 +72,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 
 ## Tests run for this revision
 
-`python -m pytest -q --cov=src --cov=agent tests` (289 tests including property, contract and adapter tests, 95%
+`python -m pytest -q --cov=src --cov=agent tests` (294 tests including property, contract and adapter tests, 95%
 coverage), `python tools/run_evals.py` (15 of 15 golden cases, scripted stand-in model), `python tools/redteam.py`
 (25 of 25 attacks contained), `ruff check .`, `bandit -r src agent integrations`, `pip-audit` on every pinned
 requirements file, `cfn-lint template.yaml infra/github-oidc.yaml`, and in CI an agent image build, smoke test

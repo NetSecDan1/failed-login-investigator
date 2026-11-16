@@ -113,6 +113,18 @@ def secret_from_env(arn_var, plain_var):
 
 # ---------- backends ----------
 
+def _newest(value):
+    """The newest event time a source reported, or None when it gave none or gave something implausible."""
+    if isinstance(value, list):
+        value = value[0] if value else None
+    if value in (None, ""):
+        return None
+    try:
+        return to_utc_z(value)
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
 class NoSigninName(LookupError):
     """The source needs the account's cloud sign-in name and the ownership source did not give one."""
 
@@ -161,6 +173,9 @@ class Backend:
                     continue
                 out[source] = {"events": int(counts["events"]),
                                "reporting_hosts": int(counts["reporting_hosts"]) if counts.get("reporting_hosts") is not None else None}
+                newest = _newest(counts.get("newest"))
+                if newest:                            # lets the report say how far behind the source is running
+                    out[source]["newest"] = newest
             except Exception:
                 out[source] = None
         return out
@@ -226,7 +241,7 @@ class SplunkBackend(Backend):
     def health_counts(self, source, start, end):
         raw = self._export(querypack.render_health("source_health_%s.spl" % source, start, end))
         row = raw[0] if raw else {}
-        return {"events": int(float(row.get("events") or 0)),
+        return {"events": int(float(row.get("events") or 0)), "newest": row.get("newest"),
                 "reporting_hosts": int(float(row["reporting_hosts"])) if row.get("reporting_hosts") not in (None, "") else None}
 
 
@@ -268,7 +283,7 @@ class DatabricksBackend(Backend):
     def health_counts(self, source, start, end):
         raw, _ = self._statement(querypack.render_health("source_health_%s.sql" % source, start, end))
         row = raw[0] if raw else {}
-        return {"events": int(float(row.get("events") or 0)),
+        return {"events": int(float(row.get("events") or 0)), "newest": row.get("newest"),
                 "reporting_hosts": int(float(row["reporting_hosts"])) if row.get("reporting_hosts") is not None else None}
 
 

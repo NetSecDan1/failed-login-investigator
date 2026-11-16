@@ -1,2 +1,2 @@
-| tstats count where index={index_entra}
+| tstats count max(_time) as newest where index={index_entra}
 | rename count as events

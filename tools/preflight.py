@@ -53,6 +53,8 @@ def check(env, runtime="function"):
         block("RATE_LIMIT_TABLE", "is required with a rate limit, otherwise each instance counts alone")
     if get("SOURCE_HEALTH_CHECK").lower() != "true":
         block("SOURCE_HEALTH_CHECK", "must be true so a silent source is not read as a clean account")
+    if number("SOURCE_MAX_LAG_MINUTES", 1) is None:
+        warn("SOURCE_MAX_LAG_MINUTES", "is 0, a source that is running behind will not be called out in reports")
     if number("EXPECTED_REPORTING_HOSTS", 1) is None:
         warn("EXPECTED_REPORTING_HOSTS", "is 0, partial collection from domain controllers will not be noticed")
     for n in ("SPLUNK_TOKEN", "DATABRICKS_TOKEN", "MODEL_GATEWAY_TOKEN", "ENTRA_CLIENT_SECRET"):

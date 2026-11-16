@@ -1,2 +1,2 @@
 union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs
-| summarize events = count()
+| summarize events = count(), newest = max(TimeGenerated)

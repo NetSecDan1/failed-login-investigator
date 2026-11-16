@@ -30,6 +30,7 @@ defaults. Passing it does not mean the deployment is approved or has been tested
 | `LOGANALYTICS_WORKSPACE_ID` | empty | Log workspace holding the sign-in tables, for the loganalytics source. | required for loganalytics |
 | `SOURCE_HEALTH_CHECK` | `true` | Ask each source for an activity count so a silent source is not read as a clean account. | must be true |
 | `EXPECTED_REPORTING_HOSTS` | `0` | Domain controllers expected to report. 0 skips the comparison. | should be above 0 |
+| `SOURCE_MAX_LAG_MINUTES` | `0` | How far the newest event in a source may trail the end of the window before the report states that recent activity may be missing. 0 records the lag without judging it. Set it after measuring each source with tools/check_sources.py. | should be set |
 | `FIELD_MAP_PATH` | empty | Path to a field map other than config/field_map.json. |  |
 | `QUERY_TEMPLATE_DIR` | empty | Path to query templates other than queries/. |  |
 | `SPLUNK_BASE_URL` | empty | Splunk management endpoint. https only. |  |

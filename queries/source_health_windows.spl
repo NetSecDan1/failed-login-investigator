@@ -1,2 +1,2 @@
-| tstats count where index={index_windows} by host
-| stats sum(count) as events dc(host) as reporting_hosts
+| tstats count max(_time) as newest where index={index_windows} by host
+| stats sum(count) as events dc(host) as reporting_hosts max(newest) as newest

@@ -33,6 +33,11 @@ Parameters:
     Type: Number
     Default: 0
     Description: Number of domain controllers expected to report logon events. 0 turns the comparison off.
+  SourceMaxLagMinutes:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: Minutes the newest event in a source may trail the window before reports say recent activity may be missing. 0 records the lag only.
   AlarmTopicArn:
     Type: String
     Default: ""
@@ -291,6 +296,7 @@ Resources:
           MODEL_TIMEOUT_SECONDS: !Ref ModelTimeoutSeconds
           OWNERSHIP_MAX_AGE_HOURS: !Ref OwnershipMaxAgeHours
           EXPECTED_REPORTING_HOSTS: !Ref ExpectedReportingHosts
+          SOURCE_MAX_LAG_MINUTES: !Ref SourceMaxLagMinutes
           RATE_LIMIT_PER_HOUR: !Ref RateLimitPerHour
           RATE_LIMIT_TABLE: !If [HasRateLimit, !Ref RateTable, ""]
           SOURCE_HEALTH_CHECK: "true"

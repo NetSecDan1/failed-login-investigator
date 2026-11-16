@@ -85,6 +85,7 @@ Sources sit behind one adapter contract, so the pipeline does not depend on any 
 - Each kind is routed to its own source with one setting.
 - A kind can list several sources, tried in order: `entra_failures=loganalytics+graph`.
 - Any source can be switched off and back on while the service runs. A switch can only take a source away.
+- Each source is checked for silence and for how far behind it is running, and the report says so.
 - A kind with no source produces a stated gap in every report, never a guess.
 
 Adapters, routing, switches and how to add a source: [`docs/SOURCES.md`](docs/SOURCES.md).

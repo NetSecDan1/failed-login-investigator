@@ -140,7 +140,10 @@ def _run(event, context, store, model, backend, reference):
         # 5. Findings (all numbers computed here, never by the model).
         health = source.health(start, end) if os.environ.get("SOURCE_HEALTH_CHECK", "true").lower() == "true" else None
         facts = findings.compute(account, start, end, pack, account_meta[account]["type"], health,
-                                 int(os.environ.get("EXPECTED_REPORTING_HOSTS", "0") or 0))
+                                 int(os.environ.get("EXPECTED_REPORTING_HOSTS", "0") or 0),
+                                 int(os.environ.get("SOURCE_MAX_LAG_MINUTES", "0") or 0), datetime.now(timezone.utc))
+        audit["source_lag_minutes"] = {k: v["lag_minutes"] for k, v in (facts["source_health"] or {}).items()
+                                       if isinstance(v, dict) and "lag_minutes" in v}
 
         # 6. Code decides which skills the evidence can support, and renders their approved steps.
         skills = explain.load_skills(store)
