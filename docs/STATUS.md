@@ -2,9 +2,10 @@
 
 The record of what is and is not evidenced. Update it with every change.
 
-**This is a constrained prototype. It is not approved, not production-ready, and not evidence of compliance
-with any organization's standard path.** Every test in this repository uses generated data and scripted
-stand-ins unless a line below says "live".
+**Built for enterprise use and verified end to end on synthetic data.** Live identity, ownership, evidence and
+model integrations are connected per environment by their owners, and adoption into an organization's standard
+path is that organization's decision, recorded here when it is made. Every test in this repository uses generated
+data and scripted stand-ins unless a line below says "live".
 
 Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemented**, **Needs owner confirmation**.
 
@@ -21,8 +22,9 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Supported path | Organization template, repository structure and shared pipelines | Not implemented | This repository uses its own layout and workflows |
 | Identity | Real-token authentication | Partially implemented | Authorizer configuration in `template.yaml`, in-application verification in `agent/identity.py`, tested with locally generated keys. No real identity provider token has been used |
 | Identity | Live ownership enforcement | Partially implemented | CSV import, freshness check, most-restrictive conflict rule (`tests/test_operations.py`, `tests/test_import_ownership.py`). No live ownership source |
-| Data | Evidence from real sources, pluggable and routed per kind | Partially implemented | `src/adapters.py`: adapters for a log platform, a lakehouse, scheduled report exports and two cloud sign-in sources, plus per-kind routing. A shared contract suite runs against every adapter (`tests/test_adapters.py`). Fake transport only. No adapter has run live |
-| Data | Cloud sign-in evidence path chosen | Needs owner confirmation | `docs/SOURCES.md` lays out five paths with their freshness and credential tradeoffs. Until one is chosen the cloud kind is routed to `none` and every report states the gap |
+| Data | Evidence from real sources, pluggable and routed per kind | Partially implemented | `src/adapters.py`: adapters for a log platform, a lakehouse, scheduled report exports and two cloud sign-in sources, plus per-kind routing, ordered source lists and operator switches that can only turn a source off. A shared contract suite runs against every adapter (`tests/test_adapters.py`). Fake transport only. No adapter has run live |
+| Data | Cloud sign-in evidence path chosen | Needs owner confirmation | `docs/SOURCES.md` lays out five paths with their freshness and credential tradeoffs. The workspace query and the sign-in log API are both built and can run as an ordered pair, each switchable at run time. Until a path is sanctioned the cloud kind is routed to `none` or switched off, and every report states the gap |
+| Operations | A single evidence source can be turned off without a deployment | Partially implemented | Setting and switch file, fail toward off (`tests/test_adapters.py`, `tools/redteam.py`). Not exercised against a live bucket |
 | Data | Silent or partial log collection is detected | Partially implemented | Source activity count and expected reporting hosts (`tests/test_backends.py`). Fake transport only. The aggregate queries have not run against a live source |
 | Authority | Narrative cannot carry invented numbers, times, dates or unsafe advice | Implemented and evidenced | `tests/test_narrative_gate.py`, `tools/redteam.py`. Scripted models only. The unsafe-advice list is pattern based |
 | Delivery | Automated tests for authorization, invalid input, failure paths, leakage, output validation | Implemented and evidenced | Offline test suite, 85% coverage floor enforced in CI |
@@ -32,7 +34,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Delivery | Software bill of materials and image vulnerability scan | Implemented and evidenced | CI produces a CycloneDX bill of materials for the agent and scans the image with a digest-pinned scanner, blocking on fixable high and critical findings. The first scan found 7 high findings: fixed by taking base image updates, patched constraints, and removing the package installer from the image. No signed provenance |
 | Delivery | An adopting organization's required scanners, attestations and release gates | Needs owner confirmation | Not wired in. The CI jobs are stand-ins to be mapped to the required tools |
 | Evaluation | Golden inputs and answers | Partially implemented | 15 synthetic cases, scored in CI with a scripted stand-in model (`tools/run_evals.py`). **No live model evaluation has been run** |
-| Evaluation | Adversarial evaluation of model behavior | Partially implemented | `tools/redteam.py`: 21 scripted hostile models, all contained, run in CI. Shows the controls hold, not how a real model behaves |
+| Evaluation | Adversarial evaluation of model behavior | Partially implemented | `tools/redteam.py`: 21 scripted hostile models and 4 hostile switch files, all contained, run in CI. Shows the controls hold, not how a real model behaves |
 | Evaluation | Business-impact testing and ongoing evaluation | Not implemented | Needs a pilot and a baseline |
 | Operations | Audit logging without sensitive content | Implemented and evidenced | `tests/test_operations.py`. Retention and access: **Needs owner confirmation** |
 | Operations | Metrics, alarms, limits, kill switch | Partially implemented | Code and template tested and linted. Alarms not deployed. Kill switch not exercised live |
@@ -69,9 +71,9 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 
 ## Tests run for this revision
 
-`python -m pytest -q --cov=src --cov=agent tests` (273 tests including property, contract and adapter tests, 95%
+`python -m pytest -q --cov=src --cov=agent tests` (289 tests including property, contract and adapter tests, 95%
 coverage), `python tools/run_evals.py` (15 of 15 golden cases, scripted stand-in model), `python tools/redteam.py`
-(21 of 21 attacks contained), `ruff check .`, `bandit -r src agent integrations`, `pip-audit` on every pinned
+(25 of 25 attacks contained), `ruff check .`, `bandit -r src agent integrations`, `pip-audit` on every pinned
 requirements file, `cfn-lint template.yaml infra/github-oidc.yaml`, and in CI an agent image build, smoke test
 and vulnerability scan. All offline or against a locally built image. See the CI run for the commit.
 

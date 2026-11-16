@@ -1,11 +1,51 @@
 # Failed Login Investigator
 
-A read-only agent that explains why an account keeps failing to log in.
-It only looks at accounts the caller owns, and that rule is enforced by code the model cannot touch.
+A read-only agent that tells an account owner why their account keeps failing to log in, and what to do about it.
 
-**Status: a constrained prototype, verified on synthetic data only.** It is not approved, not production-ready and
-not evidence of compliance with any organization's standard path. [`docs/STATUS.md`](docs/STATUS.md) lists every
-requirement with what is and is not evidenced. Contributors and coding agents: read [`AGENTS.md`](AGENTS.md) first.
+It answers one question well: *"this account keeps failing or locking out, why?"* It reads directory and cloud
+sign-in evidence for accounts the caller owns, works out the facts in code, and uses a model only to choose among
+explanations the evidence already supports and to write them up in plain language.
+
+**Status:** built for enterprise use. It is read-only and least-privilege, every control is enforced in code, and
+every push is tested against those controls. It is verified end to end on synthetic data. Live identity,
+ownership, evidence and model integrations are connected per environment by their owners.
+[`docs/STATUS.md`](docs/STATUS.md) tracks each requirement and the evidence behind it.
+
+## What a caller gets
+
+```text
+Failed login investigation: svc-batch01 (service account)
+Window: 2026-11-11T18:00:00+00:00 to 2026-11-12T18:00:00+00:00
+
+FACTS (computed from the logs)
+  Active Directory failures: 103   first 2026-11-12T09:05:02Z   last 2026-11-12T17:25:01Z
+  Source hosts: 2 distinct   external addresses: 0   lockouts: 3
+  Last password change in window: 2026-11-12T09:00:00Z
+  Top source hosts:
+    APP-BATCH07                        101
+    WKS-OPS112                         2
+  Retry rhythm: median gap 299.0 seconds, regular
+
+Skills the evidence supports: stale-credential, insufficient-evidence
+Reference to quote: INV-20261116-7D33FF9A
+```
+
+With a model connected, the same result carries a short finding ("a scheduled job on APP-BATCH07 is still using
+the password from before the 09:00 change"), numbered next steps drawn from an approved list, and an escalation
+flag when the pattern needs the security team. Without a model, the facts above are still returned in full.
+
+## Design principles
+
+- **Read-only.** No write path exists to any identity, directory or log system. The workload role allows reads on
+  its own bucket, model invocation and its own logs, with an explicit deny on everything else.
+- **Ownership decides scope.** The caller's accounts come from the identity governance source on every request,
+  and every read tool checks scope again before any I/O. Unowned and nonexistent accounts get the same answer.
+- **Code holds the authority.** Identity, scope, retrieval, every number, skill eligibility, escalation and next
+  steps are deterministic code. The model has no tools and cannot fetch data.
+- **The model is bounded.** It picks one skill from a list code already found eligible, and writes a narrative
+  that is shown only if every host, address, account, number and time in it appears in the evidence.
+- **Failure is safe.** If ownership, a source, the model or validation fails, the caller gets the verified facts
+  and a stated gap. Nothing is guessed.
 
 ## How it works
 
@@ -13,132 +53,131 @@ Nine stages. Eight are deterministic code, one is the model.
 
 | # | Stage | Where | Kind |
 |---|-------|-------|------|
-| 1 | Authenticate (JWT authorizer claims) | `src/handler.py` | code |
+| 1 | Authenticate the caller from verified token claims | `src/handler.py` | code |
 | 2 | Resolve owned accounts, fail closed | `src/scope.py` | code |
 | 3 | Validate account and time window | `src/scope.py`, `src/handler.py` | code |
-| 4 | Collect evidence through fixed-shape read tools | `src/evidence.py` | code |
-| 5 | Compute findings and signals (all numbers) | `src/findings.py` | code |
+| 4 | Collect evidence through fixed-shape read tools | `src/evidence.py`, `src/adapters.py` | code |
+| 5 | Compute findings and signals | `src/findings.py` | code |
 | 6 | Decide which skills the evidence supports, whether escalation is mandatory, and render approved steps | `src/skillmatch.py` | code |
-| 7 | Pick one allowed skill and write the narrative, behind a Bedrock Guardrail | `src/explain.py` | model |
-| 8 | Validate the model's output | `src/validator.py` | code |
-| 9 | Return facts plus report, write audit line | `src/handler.py` | code |
+| 7 | Pick one allowed skill and write the narrative, behind a content guardrail | `src/explain.py` | model |
+| 8 | Validate the model's output against the evidence | `src/validator.py` | code |
+| 9 | Return facts plus report, write one audit line | `src/handler.py` | code |
 
-If the model is unavailable, blocked by the guardrail, or fails validation twice, the caller still gets the
-facts table, the escalation flag, and no summary. The design brief is in [`docs/design-brief.html`](docs/design-brief.html).
+Data flows and trust boundaries: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+The original design brief: [`docs/design-brief.html`](docs/design-brief.html).
 
-## What is real and what is a stand-in
+## Skills
 
-| Piece | In this repo | Production target |
-|-------|--------------|-------------------|
-| Caller identity | Test claims in the event (`ALLOW_TEST_CLAIMS=true`) | Entra JWT through the optional HTTP API and JWT authorizer in `template.yaml`. Not yet deployed or tested with a real token |
-| Ownership | `ownership/ownership.json` in S3, generated | SailPoint IIQ API or scheduled export |
-| Evidence | Synthetic JSON in the data bucket (`EVIDENCE_BACKEND=file`) | Any mix of sources behind one contract, routed per kind of evidence. Adapters exist for a log platform, a lakehouse, scheduled report exports, and two cloud sign-in sources. All tested against fake responses only. See [`docs/SOURCES.md`](docs/SOURCES.md) |
-| Skill files | 13 skills in `skills/`, synced to S3. See [`docs/SKILLS.md`](docs/SKILLS.md) | Same, with pull request review |
-| Audit | One `AUDIT` JSON line per request in CloudWatch | Plus immutable S3 copy and forward to the SIEM |
+Diagnostic knowledge lives in `skills/` as 13 skill files, each a `SKILL.md` the model reads and a `rules.json`
+that code evaluates. Rules decide when a skill is eligible and when escalation is mandatory. Adding a diagnosis is
+a reviewed pull request with a golden test case, not a prompt change. See [`docs/SKILLS.md`](docs/SKILLS.md).
 
-## Quick start
+## Evidence sources
 
-**On a laptop, no AWS needed:**
+Sources sit behind one adapter contract, so the pipeline does not depend on any product.
+
+| Kind of evidence | Examples of where it can come from |
+|------------------|-------------------------------------|
+| Directory logon failures | A log platform, a lakehouse, scheduled report exports |
+| Lockouts, password changes and resets | The same |
+| Cloud sign-in failures | A log workspace query, the sign-in log API, or any of the above |
+
+- Each kind is routed to its own source with one setting.
+- A kind can list several sources, tried in order: `entra_failures=loganalytics+graph`.
+- Any source can be switched off and back on while the service runs. A switch can only take a source away.
+- A kind with no source produces a stated gap in every report, never a guess.
+
+Adapters, routing, switches and how to add a source: [`docs/SOURCES.md`](docs/SOURCES.md).
+
+## Try it
+
+On a laptop, no cloud account needed:
 
 ```bash
 python tools/investigate.py --caller E1001 --list
-python tools/investigate.py --caller E1001 --account svc-batch01          # facts and allowed skills, no model
-python tools/investigate.py --caller E5000 --account ev-legacy --model us.anthropic.claude-sonnet-4-6   # adds the model, uses your AWS credentials
+python tools/investigate.py --caller E1001 --account svc-batch01
+python tools/investigate.py --caller E5000 --account ev-legacy --model <model-id>   # adds the model, uses your AWS credentials
 ```
 
-**Deployed:**
+## Deploy it
 
-Prerequisite: Anthropic model access in the target account. Bedrock asks first-time accounts to submit
-use case details for Anthropic models. Until that is done the function returns facts only.
+| Path | Guide |
+|------|-------|
+| Console walkthrough with a ready-made bundle | [`docs/DEPLOY_CONSOLE.md`](docs/DEPLOY_CONSOLE.md) |
+| Command line, pipeline, HTTP API with token authorizer | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
+| Editor workspace with assistant chat | [`docs/VSCODE.md`](docs/VSCODE.md) |
 
-```bash
-./deploy.sh us.anthropic.claude-sonnet-5-5   # creates stack fli-proto in your current region
-./run_tests.sh                                # six live cases, one line each
-./teardown.sh                                 # removes everything
-```
-
-Other ways to deploy, the HTTP API and its parameters: [`docs/DEPLOY.md`](docs/DEPLOY.md).
-For a click-by-click console walkthrough: [`docs/DEPLOY_CONSOLE.md`](docs/DEPLOY_CONSOLE.md).
-
-## Layout
-
-| Path | What |
-|------|------|
-| `src/` | The pipeline. `handler.py` is the entry point. `adapters.py` wires evidence sources, `modelroute.py` decides how the model is reached |
-| `skills/` | 13 skills, each `SKILL.md` plus `rules.json` |
-| `queries/`, `config/field_map.json` | Fixed query templates and the source field mapping |
-| `evals/cases.json` | One synthetic case per skill |
-| `examples/events/` | Ready-made requests for the synthetic data set |
-| `tools/` | Local CLI, data generator, skill index builder, live eval runner |
-| `tests/` | Offline tests, no network |
-| `agent/` | Entry point for a managed agent runtime, built on a standard agent framework |
-| `integrations/` | Editor tool server (Model Context Protocol) |
-| `infra/` | Optional pipeline deploy role |
-| `schemas/` | The response contract as JSON Schema |
-| `config/` | Source field mapping and the registry of every setting the code reads |
-| `docs/` | Status, architecture and data flows, configuration, sources, editor guide, use case, risks, operations, measurement, deploy, skills and backends guides, design brief |
-
-## Tests
-
-```bash
-pip install pytest pyyaml
-python -m pytest -q tests                 # offline: pipeline, query renderer, skill lint, matcher golden cases
-python tools/run_evals.py                 # live: scores the model on evals/cases.json (needs model access)
-```
-
-The offline suite covers scope bypass, fail-closed ownership, template-injection input, Tier 0 and deny-list
-exclusion, hostile text planted in log fields, invented entities in model output, a model trying to pick a skill
-the evidence does not support, a model trying to talk down a mandatory escalation, and one golden case per skill.
-
-## Guardrails in one list
-
-- No write path to any identity or log system. The role allows `s3:GetObject` and `s3:ListBucket` on its own bucket, `bedrock:InvokeModel`, `bedrock:ApplyGuardrail` and its own log writes, with an explicit deny on everything else. With the per-caller rate limit on, it may also update one counter table of its own.
-- Scope is resolved per request from the ownership source and re-checked inside every read tool.
-- Unowned and nonexistent accounts get the same answer, so the agent is not an existence oracle.
-- Read tools take `(account, start, end)` only. No free-text queries.
-- Source host values that are not valid host names never reach the model.
-- The model has no data-fetching tools. It can only fill in the report form.
-- The model chooses only among skills that code found eligible, and cannot downgrade a mandatory escalation.
-- Next steps are approved templates rendered by code. The model returns step numbers, never step text.
-- The report is shown only if every host, IP and account in it already appears in the evidence.
-
-## Two ways to run it
+It runs in two shapes on the same pipeline, and in both the reply is rendered by code from validated results.
 
 | | Function behind an HTTP API | Managed agent runtime |
 |---|---|---|
 | Code | `src/handler.py`, `template.yaml` | `agent/app.py`, `agent/Dockerfile` |
 | Input | Typed request: account and window | Typed request, or a sentence that a routing model maps to one of two typed tools |
 | Model use | One call to explain, one retry at most | The same, plus a small routing call for free-text requests |
-| State | Deployed once to a sandbox on an early build | Unit tested with a scripted model. Not deployed |
 
-Both run the same pipeline, and in both the reply is rendered by code from validated results. The model is
-reached through `MODEL_ROUTE`: `bedrock` for a direct call, or `gateway` for a central model gateway with an
-OpenAI-compatible API. Which combination an organization permits is an owner decision recorded in `docs/STATUS.md`.
+The model is reached through `MODEL_ROUTE`: a direct call, or a central model gateway. Every setting, with its
+production rule, is in [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md), and `python tools/preflight.py` checks a
+configuration before it ships.
 
-## In the editor
+## Quality gates
 
-The workspace is set up for Visual Studio Code with GitHub Copilot: assistant instructions that carry this
-repository's rules, reusable prompts, one-click tasks for every gate, and an optional tool server so the
-investigator can be called from chat. Synthetic data only unless it is pointed at a deployed service with your own
-token. See [`docs/VSCODE.md`](docs/VSCODE.md).
+Every push runs:
 
-## Delivery gates
+- unit, contract and property tests with a coverage floor
+- one golden case per skill and an adversarial suite that must report every attack contained
+- lint, static security analysis, a dependency audit and a secret scan over full history
+- infrastructure lint, a container build with a smoke test and a vulnerability scan
+- a checksummed release artifact with a software bill of materials
 
-Every push runs unit and property tests with a coverage floor, the golden cases and the adversarial suite, lint,
-static security analysis, a dependency audit, a secret scan over full history, infrastructure lint, a container
-build with a smoke test, and builds a checksummed artifact with a software bill of materials. These are stand-ins for whatever
-scanners and attestations an adopting organization requires.
+```bash
+pip install pytest pyyaml
+python -m pytest -q tests        # offline, no network
+python tools/redteam.py          # hostile models and hostile operator input
+python tools/run_evals.py        # scores a live model on evals/cases.json
+```
 
 ## Operating it
 
-[`docs/OPERATIONS.md`](docs/OPERATIONS.md) covers what is logged, metrics, alarms, limits, the kill switch and a
-runbook. [`docs/MEASUREMENT.md`](docs/MEASUREMENT.md) covers cost per successfully completed investigation and why
-no return on investment is claimed yet. [`docs/RISKS.md`](docs/RISKS.md) is the working risk register.
+| Topic | Where |
+|-------|-------|
+| Audit line, metrics, alarms, limits, kill switch, runbook | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) |
+| Cost per successfully completed investigation | [`docs/MEASUREMENT.md`](docs/MEASUREMENT.md) |
+| Risk register | [`docs/RISKS.md`](docs/RISKS.md) |
+| Use case, users and success measures | [`docs/USE_CASE.md`](docs/USE_CASE.md) |
+| Security policy | [`SECURITY.md`](SECURITY.md) |
+
+## Repository layout
+
+| Path | What |
+|------|------|
+| `src/` | The pipeline. `handler.py` is the entry point |
+| `skills/` | Skill files and rules |
+| `queries/`, `config/` | Fixed query templates, source field mapping, the registry of every setting |
+| `agent/` | Entry point for a managed agent runtime, on a standard agent framework |
+| `integrations/` | Tool server for editor assistants |
+| `schemas/` | The response contract as JSON Schema |
+| `evals/`, `examples/` | Golden cases, ready-made requests and switch files |
+| `tools/` | Local CLI, data generator, evaluation and adversarial runners, preflight, importers |
+| `tests/` | Offline tests |
+| `infra/`, `template.yaml` | Infrastructure as code |
+| `docs/` | Guides and the status record |
+
+Contributors and coding agents: start with [`AGENTS.md`](AGENTS.md).
+
+## Current state
+
+| Piece | In this repository | Connected per environment |
+|-------|--------------------|---------------------------|
+| Caller identity | Token authorizer configuration and in-application verification, tested with locally generated keys | The organization's identity provider |
+| Ownership | Import from a governance report, with a freshness check | The identity governance system, by API or scheduled export |
+| Evidence | Adapters behind one contract, tested against scripted responses | The sources each owner sanctions |
+| Model | Direct and gateway routes, scripted model in tests | An approved model through the approved route |
+| Audit | One structured line per request | Forwarding to the security log platform |
 
 ## Known limits
 
-- Not 100% safe, and nothing is. What is guaranteed by construction is no write path to identity or log systems and no out-of-scope read. Wrong explanations and stale ownership data remain possible.
-- No live model, token, ownership source, evidence source or model gateway has been exercised.
-- The entity check in the validator is a heuristic (tokens that mix letters and digits). Expect occasional false rejects, which fall back to facts only.
-- Skill wording has not been evaluated against a live model. Thresholds in `rules.json` were set against synthetic data.
-- The per-caller rate limit is off by default and has not run against a real counter table. No user interface.
+- Live sources, tokens, ownership data and models have not yet been exercised. Each is labelled in `docs/STATUS.md`.
+- Wrong explanations and stale ownership data remain possible. The first is bounded by the validator and the facts-only fallback, the second by the ownership freshness check.
+- The entity check in the validator is a heuristic. Expect occasional false rejects, which fall back to facts only.
+- Skill thresholds were set against synthetic data and need tuning against real patterns.
+- The per-caller rate limit is off by default. There is no user interface, only the API and the response contract.

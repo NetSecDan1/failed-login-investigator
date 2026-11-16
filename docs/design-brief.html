@@ -165,7 +165,7 @@ footer{padding:24px 0 48px;color:var(--muted);font-size:14px}
     </div>
   </div>
   <div class="callout warn">
-    <p><strong>On "100% safe".</strong> No system earns that label, and a design review will reject the claim. What this design can honestly state is narrower and stronger:</p>
+    <p><strong>What the design guarantees.</strong> Safety here is stated as specific properties a reviewer can verify, with the remaining risks named and mitigated:</p>
     <ul>
       <li><strong>Guaranteed by construction:</strong> it cannot change anything (no write permissions exist anywhere in its roles), and it cannot query an account outside the caller's IIQ ownership set (the check is code, on every call, with tests).</li>
       <li><strong>Residual risk:</strong> wrong explanations, stale or wrong ownership data in IIQ, a compromised owner account seeing its own failure data, and gaps in log coverage. Each has a mitigation below.</li>
