@@ -72,7 +72,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 
 ## Tests run for this revision
 
-`python -m pytest -q --cov=src --cov=agent tests` (294 tests including property, contract and adapter tests, 95%
+`python -m pytest -q --cov=src --cov=agent tests` (295 tests including property, contract and adapter tests, 95%
 coverage), `python tools/run_evals.py` (15 of 15 golden cases, scripted stand-in model), `python tools/redteam.py`
 (25 of 25 attacks contained), `ruff check .`, `bandit -r src agent integrations`, `pip-audit` on every pinned
 requirements file, `cfn-lint template.yaml infra/github-oidc.yaml`, and in CI an agent image build, smoke test

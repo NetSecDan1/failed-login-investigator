@@ -31,7 +31,8 @@ immutable store and the security monitoring platform. **Needs owner confirmation
 
 With `METRICS_EMF=true` each request also writes an embedded metric line, which becomes metrics in the
 `FailedLoginInvestigator` namespace with an `Outcome` dimension: `Requests`, `Reports`, `LatencyMs`,
-`InputTokens`, `OutputTokens`, `ModelCalls`, `ValidatorRejects`, `Escalations`.
+`InputTokens`, `OutputTokens`, `ModelCalls`, `ValidatorRejects`, `Escalations`, `SourceFallbacks`, `SourceLagMinutes`.
+Each is also published without a dimension, for alarms that should not care about the outcome.
 
 | Measure | From |
 |---------|------|
@@ -44,13 +45,15 @@ With `METRICS_EMF=true` each request also writes an embedded metric line, which 
 
 ## Alarms
 
-Set the `AlarmTopicArn` template parameter to create three alarms:
+Set the `AlarmTopicArn` template parameter to create these alarms:
 
 | Alarm | Means | First response |
 |-------|-------|----------------|
 | Function errors | The function is raising. Callers get errors | Check the latest logs. If it persists, switch the service off |
 | Validator rejects, 5 or more in an hour | Model output is being refused: drift, an attack, or a skill wording problem | Read `notes` in recent audit lines. Callers are still safe: they get facts only |
 | Mandatory escalation | An owner was told to contact security operations | Informational, so that team expects the contact |
+| Source fallbacks, 3 or more in 15 minutes | A first-choice evidence source is failing and a later one is covering | See `sources_passed_over` and `source_errors` in audit lines, then fix the first source |
+| Source lag above `SOURCE_MAX_LAG_MINUTES` for 30 minutes | A source's pipeline is behind. Created only when the limit is set | Run `tools/check_sources.py`, then see the runbook below |
 
 Thresholds are placeholders. Tune them once there is real traffic.
 

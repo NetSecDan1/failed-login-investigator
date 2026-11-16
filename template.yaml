@@ -122,6 +122,7 @@ Conditions:
   HasGatewaySecret: !Not [!Equals [!Ref ModelGatewayTokenSecretArn, ""]]
   HasRateLimit: !Not [!Equals [!Ref RateLimitPerHour, 0]]
   HasAlarms: !Not [!Equals [!Ref AlarmTopicArn, ""]]
+  HasLagAlarm: !And [!Not [!Equals [!Ref AlarmTopicArn, ""]], !Not [!Equals [!Ref SourceMaxLagMinutes, 0]]]
   HasBoundary: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
   InVpc: !Not [!Equals [!Join ["", !Ref VpcSubnetIds], ""]]
 Resources:
@@ -349,6 +350,34 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 5
       ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopicArn]
+  AlarmSourceFallbacks:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasAlarms
+    Properties:
+      AlarmDescription: A first-choice evidence source is failing and a later source in its list is answering instead. Reports are complete but may be less fresh or use a wider credential.
+      Namespace: FailedLoginInvestigator
+      MetricName: SourceFallbacks
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopicArn]
+  AlarmSourceLag:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasLagAlarm
+    Properties:
+      AlarmDescription: An evidence source is running further behind than the configured limit. Recent failures may be missing from reports.
+      Namespace: FailedLoginInvestigator
+      MetricName: SourceLagMinutes
+      Statistic: Maximum
+      Period: 900
+      EvaluationPeriods: 2
+      Threshold: !Ref SourceMaxLagMinutes
+      ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: [!Ref AlarmTopicArn]
   AlarmMandatoryEscalations:

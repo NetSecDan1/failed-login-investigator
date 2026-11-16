@@ -65,11 +65,13 @@ def _emit_metrics(rec):
     values = {"Requests": 1, "LatencyMs": rec.get("latency_ms", 0), "InputTokens": rec.get("tokens_in", 0),
               "OutputTokens": rec.get("tokens_out", 0), "ModelCalls": rec.get("model_calls", 0),
               "ValidatorRejects": rec.get("validator_rejects", 0), "Escalations": 1 if rec.get("must_escalate") else 0,
-              "Reports": 1 if rec.get("outcome") == "report" else 0}
+              "Reports": 1 if rec.get("outcome") == "report" else 0,
+              "SourceFallbacks": len(rec.get("sources_passed_over") or {}),
+              "SourceLagMinutes": max((rec.get("source_lag_minutes") or {}).values(), default=0)}
     units = {"LatencyMs": "Milliseconds"}
     print(json.dumps(dict(values, Outcome=rec.get("outcome", "error"), _aws={
         "Timestamp": int(time.time() * 1000),
-        "CloudWatchMetrics": [{"Namespace": "FailedLoginInvestigator", "Dimensions": [["Outcome"]],
+        "CloudWatchMetrics": [{"Namespace": "FailedLoginInvestigator", "Dimensions": [["Outcome"], []],
                                "Metrics": [{"Name": k, "Unit": units.get(k, "Count")} for k in values]}]})))
 
 

@@ -215,3 +215,16 @@ def test_direct_route_guardrail_block_error_and_empty_answer_all_withhold(monkey
     assert report is None and meta["reason"].startswith("model_error:RuntimeError")
     empty = _FakeBedrock({"stopReason": "end_turn", "usage": {}, "output": {"message": {"content": [{"text": "hi"}]}}})
     assert _direct(monkeypatch, empty)[1]["reason"] == "no_report_returned"
+
+
+def test_metrics_carry_source_fallbacks_and_lag_with_and_without_the_outcome_dimension(monkeypatch, capsys):
+    import handler
+    monkeypatch.setenv("METRICS_EMF", "true")
+    handler._audit({"outcome": "report", "sources_passed_over": {"entra_failures": ["loganalytics:source_unavailable"]},
+                    "source_lag_minutes": {"windows": 2, "entra": 187}})
+    m = [json.loads(l) for l in capsys.readouterr().out.splitlines() if l.startswith("{")][-1]
+    assert m["SourceFallbacks"] == 1 and m["SourceLagMinutes"] == 187
+    assert m["_aws"]["CloudWatchMetrics"][0]["Dimensions"] == [["Outcome"], []]
+    handler._audit({"outcome": "denied"})
+    m = [json.loads(l) for l in capsys.readouterr().out.splitlines() if l.startswith("{")][-1]
+    assert m["SourceFallbacks"] == 0 and m["SourceLagMinutes"] == 0
