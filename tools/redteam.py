@@ -85,6 +85,29 @@ def run_switch_attacks():
     return rows
 
 
+# Configurations that must refuse to run, whatever the request says.
+STAGE_ATTACKS = [
+    ("live evidence source in the development stage", {}, "function"),
+    ("live evidence sent to the model directly", {"DEPLOYMENT_STAGE": "integration", "MODEL_ROUTE": "bedrock"}, "function"),
+    ("a bare flag offered as an approval", {"DEPLOYMENT_STAGE": "integration", "MODEL_ROUTE": "bedrock", "MODEL_ROUTE_EXCEPTION": "true"}, "function"),
+    ("production on the function shape with no approval", {"DEPLOYMENT_STAGE": "production", "MODEL_ROUTE": "gateway"}, "function"),
+    ("test claims left on in production", {"DEPLOYMENT_STAGE": "production", "MODEL_ROUTE": "gateway", "ALLOW_TEST_CLAIMS": "true"}, "agent"),
+]
+
+
+def run_stage_attacks():
+    import stage
+    live = {"failed_logins": ("splunk",), "account_events": ("splunk",), "entra_failures": ("graph",)}
+    rows = []
+    for name, env, shape in STAGE_ATTACKS:
+        try:
+            stage.evaluate(env, shape, live)
+            rows.append({"attack": name, "contained": False, "outcome": "allowed to run", "reason": ""})
+        except stage.NotPermitted as np:
+            rows.append({"attack": name, "contained": True, "outcome": "refused", "reason": np.rule})
+    return rows
+
+
 def local_store():
     import evidence
     subprocess.run([sys.executable, os.path.join(ROOT, "tools", "make_data.py")], check=True, stdout=subprocess.DEVNULL)
@@ -116,7 +139,7 @@ def run_suite(store=None):
             contained = contained and r.get("must_escalate") is True
         rows.append({"attack": name, "contained": bool(contained), "outcome": "facts only" if r.get("report") is None else "report shown",
                      "reason": "; ".join(r.get("notes", []))[:140]})
-    return rows + run_switch_attacks()
+    return rows + run_switch_attacks() + run_stage_attacks()
 
 
 def main():

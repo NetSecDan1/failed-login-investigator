@@ -84,5 +84,5 @@ def check_account(account, scope_set):
     account = account.lower()
     if account not in scope_set:
         # Same answer whether the account exists or not: no existence oracle.
-        raise Denied("out_of_scope", "You can only investigate accounts you own.")
+        raise Denied("out_of_scope", "You can only investigate accounts you own. Check the account name and try again.")
     return account

@@ -128,7 +128,7 @@ class ChainBackend(Backend):
 
     def query(self, kind, account, start, end, scope_set, signin_name=None):
         if account not in scope_set:                  # before the switch file or any source is touched
-            raise backends.scope.Denied("out_of_scope", "You can only investigate accounts you own.")
+            raise backends.scope.Denied("out_of_scope", "You can only investigate accounts you own. Check the account name and try again.")
         live, problem = self._live()
         last, passed = None, []
         for name, member in live:

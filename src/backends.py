@@ -139,7 +139,7 @@ class Backend:
 
     def query(self, kind, account, start, end, scope_set, signin_name=None):
         if account not in scope_set:                  # re-check inside every tool, before any I/O
-            raise scope.Denied("out_of_scope", "You can only investigate accounts you own.")
+            raise scope.Denied("out_of_scope", "You can only investigate accounts you own. Check the account name and try again.")
         qid = "%s:%s:%s" % (self.name, kind, account)
         if kind not in self.kinds:
             return {"query_id": qid, "rows": [], "truncated": False, "error": "source_not_configured"}

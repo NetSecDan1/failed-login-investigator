@@ -101,6 +101,20 @@ def check(env, runtime="function"):
     if key and not re.fullmatch(r"[A-Za-z0-9._/-]{1,200}", key):
         block("SOURCE_SWITCH_KEY", "must be a plain object key")
 
+    import stage
+    if get("DEPLOYMENT_STAGE").lower() != "production":
+        block("DEPLOYMENT_STAGE", "must be production for a real deployment. development is synthetic data only, integration is for first contact")
+    else:
+        try:
+            _, used = stage.evaluate({n: get(n) for n in ("DEPLOYMENT_STAGE", "MODEL_ROUTE", "ALLOW_TEST_CLAIMS", "MODEL_ROUTE_EXCEPTION",
+                                                          "FUNCTION_RUNTIME_EXCEPTION")}, runtime, routes or {"none": ("none",)})
+            for item in used:
+                warn(item.split(":")[0].upper() + "_EXCEPTION", "running on an approved exception (%s), not the supported path" % item.split(":", 1)[1])
+        except stage.NotPermitted as np:
+            names = {"model_must_use_the_governed_route": "MODEL_ROUTE", "production_runs_on_the_managed_agent_runtime": "FUNCTION_RUNTIME_EXCEPTION",
+                     "test_claims_in_production": "ALLOW_TEST_CLAIMS", "synthetic_evidence_in_production": "EVIDENCE_BACKEND"}
+            block(names.get(np.rule, "DEPLOYMENT_STAGE"), np.rule.replace("_", " "))
+
     route = get("MODEL_ROUTE").lower()
     if route == "gateway":
         for n in ("MODEL_GATEWAY_URL", "MODEL_GATEWAY_TOKEN_SECRET_ARN"):
@@ -111,8 +125,10 @@ def check(env, runtime="function"):
             warn("GUARDRAIL_ID", "no guardrail on the direct model route")
         elif get("GUARDRAIL_VERSION") == "DRAFT":
             warn("GUARDRAIL_VERSION", "is DRAFT: pin a numbered version so behavior cannot change underneath you")
+    elif route == "off":
+        warn("MODEL_ROUTE", "is off, every result will be facts only")
     else:
-        block("MODEL_ROUTE", "is not one of bedrock, gateway")
+        block("MODEL_ROUTE", "is not one of gateway, off, bedrock")
     for n, lo, hi in (("MODEL_MAX_OUTPUT_TOKENS", 200, 4000), ("MODEL_TIMEOUT_SECONDS", 5, 120), ("MODEL_MAX_ATTEMPTS", 1, 3)):
         v = number(n, lo)
         if v is None or v > hi:

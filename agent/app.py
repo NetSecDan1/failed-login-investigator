@@ -63,7 +63,7 @@ def make_router_model():
 def _pipeline(claims, request, store, explain_model=None):
     """Run the deterministic pipeline with verified claims. Audit lines go to stdout as usual."""
     event = dict(request, requestContext={"authorizer": {"jwt": {"claims": claims}}})
-    return handler.handler(event, None, store=store, model=explain_model)
+    return handler.handler(event, None, store=store, model=explain_model, shape="agent")
 
 
 def run(payload, headers=None, store=None, router_model=None, explain_model=None, key_resolver=None):

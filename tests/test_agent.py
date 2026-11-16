@@ -96,7 +96,7 @@ def test_no_tool_call_gets_the_fixed_help_text_not_model_text():
 
 def test_bad_tool_arguments_become_clean_denials():
     m = Scripted([{"tool": "investigate_failed_logins", "input": {"account": "svc-batch01\" OR 1=1", "window_hours": 99999}}])
-    assert turn({"prompt": "x"}, m)["results"][0]["reason"] == "bad_account"
+    assert turn({"prompt": "x"}, m)["results"][0]["reason"] == "out_of_scope"
 
 
 # ---------- token verification ----------

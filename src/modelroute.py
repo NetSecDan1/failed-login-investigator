@@ -1,6 +1,7 @@
 """Model access route. One place decides how the model is reached and what limits apply.
 
   MODEL_ROUTE=bedrock   direct Bedrock Converse call with an optional Bedrock Guardrail (prototype default)
+  MODEL_ROUTE=off       no model call. Every result is facts only
   MODEL_ROUTE=gateway   an OpenAI-compatible chat completions endpoint, for organisations that require all
                         model traffic to pass through a central model gateway
 
@@ -105,4 +106,6 @@ def call_report(system, user_text, schema, transport=None):
         return _gateway(system, user_text, schema, lim, transport)
     if route == "bedrock":
         return _bedrock(system, user_text, schema, lim)
+    if route == "off":                                # facts only, by configuration
+        return None, {"model": None, "route": route, "reason": "model_off"}
     return None, {"model": None, "route": route, "reason": "model_error:unknown_model_route"}

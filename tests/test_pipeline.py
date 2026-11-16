@@ -37,7 +37,7 @@ def test_non_owner_denied_before_any_read():
     s = Spy(FILES)
     r = run(ev("E1001", "svc-payroll"), store=s)
     ref = r.pop("reference")
-    assert ref.startswith("INV-") and r == {"status": "denied", "reason": "out_of_scope", "message": "You can only investigate accounts you own."}
+    assert ref.startswith("INV-") and r == {"status": "denied", "reason": "out_of_scope", "message": "You can only investigate accounts you own. Check the account name and try again."}
     assert s.seen == ["ownership/ownership.json"] and CALLS == []
 
 def test_nonexistent_same_answer_as_unowned():
@@ -58,7 +58,7 @@ def test_ownership_source_down_fails_closed():
 
 def test_template_injection_rejected():
     for bad in ['svc-batch01" OR user=*', "svc-batch01|delete", "*", "", None, "a" * 65, "svc batch"]:
-        assert run(ev("E1001", bad))["reason"] == "bad_account", bad
+        assert run(ev("E1001", bad))["reason"] == "out_of_scope", bad
 
 def test_case_insensitive_account():
     assert run(ev("E1001", "SVC-Batch01"))["status"] == "ok"

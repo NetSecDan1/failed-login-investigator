@@ -38,9 +38,9 @@ def test_investigate_over_http():
     ({}, {"account": "svc-batch01"}, 401, "unauthenticated"),
     ({"employee_id": "E1001"}, {"account": "svc-payroll"}, 403, "out_of_scope"),
     ({"employee_id": "E9999"}, {"account": "svc-batch01"}, 403, "scope_empty"),
-    ({"employee_id": "E1001"}, {"account": "bad name"}, 400, "bad_account"),
+    ({"employee_id": "E1001"}, {"account": "bad name"}, 403, "out_of_scope"),
     ({"employee_id": "E1001"}, {"account": "svc-batch01", "window_hours": 999}, 400, "window_out_of_range"),
-    ({"employee_id": "E1001"}, None, 400, "bad_account"),
+    ({"employee_id": "E1001"}, None, 403, "out_of_scope"),
 ])
 def test_http_status_codes(claims, body, code, reason):
     got, out, _ = call(http("POST /investigations", claims, body))

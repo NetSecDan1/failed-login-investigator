@@ -14,6 +14,18 @@
    "production": null
   },
   {
+   "name": "DEPLOYMENT_STAGE",
+   "default": "development",
+   "purpose": "development allows synthetic data only. integration allows live sources for first contact. production allows only the managed agent runtime and the governed model route. A configuration that breaks the stage rules refuses every request.",
+   "production": "must be production"
+  },
+  {
+   "name": "FUNCTION_RUNTIME_EXCEPTION",
+   "default": "",
+   "purpose": "Approval reference that permits running as a plain function in the production stage instead of the managed agent runtime. Recorded on every audit line while in use.",
+   "production": null
+  },
+  {
    "name": "ALLOW_TEST_CLAIMS",
    "default": "false",
    "purpose": "Accept the caller from the request body. Development only.",
@@ -226,8 +238,14 @@
   {
    "name": "MODEL_ROUTE",
    "default": "bedrock",
-   "purpose": "bedrock for a direct call, gateway for a central OpenAI-compatible model gateway.",
-   "production": "owner decision"
+   "purpose": "gateway for the governed central model gateway, off for no model call, bedrock for a direct call. With live evidence, bedrock is refused unless MODEL_ROUTE_EXCEPTION holds an approval reference.",
+   "production": "must be gateway, or off, or carry an approved exception"
+  },
+  {
+   "name": "MODEL_ROUTE_EXCEPTION",
+   "default": "",
+   "purpose": "Approval reference that permits the direct model route with live evidence, such as a change or risk record number. Recorded on every audit line while in use.",
+   "production": null
   },
   {
    "name": "MODEL_ID",

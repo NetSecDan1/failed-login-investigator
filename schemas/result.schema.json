@@ -12,7 +12,7 @@
    "properties": {
     "status": {"const": "denied"},
     "reason": {"enum": ["unauthenticated", "out_of_scope", "scope_empty", "ownership_unavailable", "ownership_stale",
-                        "bad_account", "bad_window", "window_out_of_range", "bad_route", "disabled", "rate_limited", "rate_limit_unavailable"]},
+                        "bad_window", "window_out_of_range", "bad_route", "disabled", "not_permitted", "rate_limited", "rate_limit_unavailable"]},
     "message": {"type": "string"},
     "reference": {"$ref": "#/$defs/reference"}
    }

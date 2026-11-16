@@ -12,8 +12,21 @@ Parameters:
   ModelRoute:
     Type: String
     Default: bedrock
-    AllowedValues: [bedrock, gateway]
-    Description: How the model is reached. "gateway" sends requests to an OpenAI-compatible model gateway instead of calling Bedrock directly.
+    AllowedValues: [bedrock, gateway, "off"]
+    Description: How the model is reached. gateway is the governed route. off makes every result facts only. bedrock is a direct call, refused with live evidence unless ModelRouteException is set.
+  ModelRouteException:
+    Type: String
+    Default: ""
+    Description: Approval reference permitting the direct model route with live evidence
+  DeploymentStage:
+    Type: String
+    Default: development
+    AllowedValues: [development, integration, production]
+    Description: development is synthetic data only. integration allows live sources. production also requires the governed model route, and FunctionRuntimeException for this function shape.
+  FunctionRuntimeException:
+    Type: String
+    Default: ""
+    Description: Approval reference permitting this function shape in the production stage instead of the managed agent runtime
   ModelGatewayUrl: {Type: String, Default: ""}
   ModelGatewayTokenSecretArn:
     Type: String
@@ -291,6 +304,9 @@ Resources:
           AGENT_ENABLED: !Ref AgentEnabled
           METRICS_EMF: "true"
           MODEL_ROUTE: !Ref ModelRoute
+          MODEL_ROUTE_EXCEPTION: !Ref ModelRouteException
+          DEPLOYMENT_STAGE: !Ref DeploymentStage
+          FUNCTION_RUNTIME_EXCEPTION: !Ref FunctionRuntimeException
           MODEL_GATEWAY_URL: !Ref ModelGatewayUrl
           MODEL_GATEWAY_TOKEN_SECRET_ARN: !If [HasGatewaySecret, !Ref ModelGatewayTokenSecretArn, ""]
           MODEL_MAX_OUTPUT_TOKENS: !Ref ModelMaxOutputTokens

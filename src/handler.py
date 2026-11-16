@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 import uuid
 
 import scope, evidence, backends, findings, explain, validator, skillmatch, ratelimit
+import stage
 
 MAX_WINDOW_HOURS = 168
 
@@ -75,8 +76,11 @@ def _emit_metrics(rec):
                                "Metrics": [{"Name": k, "Unit": units.get(k, "Count")} for k in values]}]})))
 
 
+# A malformed name, an account that does not exist and an account someone else owns are indistinguishable to the caller.
+SAME_ANSWER = ("bad_account", "out_of_scope")
+NOT_YOURS = "You can only investigate accounts you own. Check the account name and try again."
 HTTP_STATUS = {"unauthenticated": 401, "out_of_scope": 403, "scope_empty": 403, "ownership_unavailable": 503,
-               "ownership_stale": 503, "disabled": 503, "rate_limited": 429, "rate_limit_unavailable": 503}
+               "ownership_stale": 503, "disabled": 503, "not_permitted": 503, "rate_limited": 429, "rate_limit_unavailable": 503}
 
 
 def _respond(event, result):
@@ -93,14 +97,15 @@ def new_reference():
     return "INV-%s-%s" % (datetime.now(timezone.utc).strftime("%Y%m%d"), uuid.uuid4().hex[:8].upper())
 
 
-def handler(event, context=None, store=None, model=None, backend=None):
+def handler(event, context=None, store=None, model=None, backend=None, shape="function"):
+    """shape is "agent" when called by the managed agent runtime entry point, "function" otherwise."""
     reference = new_reference()
-    result = _run(event, context, store, model, backend, reference)
+    result = _run(event, context, store, model, backend, reference, shape)
     result["reference"] = reference
     return _respond(event, result)
 
 
-def _run(event, context, store, model, backend, reference):
+def _run(event, context, store, model, backend, reference, shape="function"):
     t0 = time.time()
     store = store or evidence.S3Store(os.environ["DATA_BUCKET"])
     route = event.get("routeKey") or event.get("action") or "POST /investigations"
@@ -108,6 +113,13 @@ def _run(event, context, store, model, backend, reference):
     try:
         if os.environ.get("AGENT_ENABLED", "true").lower() != "true":   # operator kill switch
             raise scope.Denied("disabled", "This service is switched off. Try again later.")
+        try:                                          # is this configuration allowed to run at all
+            audit["stage"], exceptions = stage.check(shape, backend_injected=backend is not None)
+        except stage.NotPermitted as np:
+            audit["stage_rule"] = np.rule
+            raise scope.Denied("not_permitted", "This service is not configured for use. Contact the service owner.") from None
+        if exceptions:
+            audit["stage_exceptions"] = exceptions
         if route not in ("POST /investigations", "GET /accounts", "list_accounts"):
             raise scope.Denied("bad_route", "Unknown route.")
         # 1. Authenticate. Claims come from the API Gateway JWT authorizer. Claims passed in the
@@ -187,7 +199,9 @@ def _run(event, context, store, model, backend, reference):
                 "must_escalate": matched["must_escalate"], "report": report,
                 "notes": notes, "ms": int((time.time() - t0) * 1000)}
     except scope.Denied as d:
-        audit.update(outcome="denied", reason=d.code)
+        audit.update(outcome="denied", reason=d.code)         # the audit line keeps the precise reason
+        if d.code in SAME_ANSWER:                              # callers get one answer for every "not yours" case
+            return {"status": "denied", "reason": "out_of_scope", "message": NOT_YOURS}
         return {"status": "denied", "reason": d.code, "message": d.message}
     finally:
         audit["latency_ms"] = int((time.time() - t0) * 1000)

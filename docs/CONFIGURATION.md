@@ -10,6 +10,8 @@ defaults. Passing it does not mean the deployment is approved or has been tested
 |---------|---------|---------|-----------------------|
 | `DATA_BUCKET` | empty | Bucket holding skills, and the ownership file and synthetic evidence when those backends are in use. | required |
 | `AGENT_ENABLED` | `true` | Operator kill switch. Anything but true refuses every request before identity, data or model. |  |
+| `DEPLOYMENT_STAGE` | `development` | development allows synthetic data only. integration allows live sources for first contact. production allows only the managed agent runtime and the governed model route. A configuration that breaks the stage rules refuses every request. | must be production |
+| `FUNCTION_RUNTIME_EXCEPTION` | empty | Approval reference that permits running as a plain function in the production stage instead of the managed agent runtime. Recorded on every audit line while in use. |  |
 | `ALLOW_TEST_CLAIMS` | `false` | Accept the caller from the request body. Development only. | must be false |
 | `CALLER_CLAIM` | `employee_id` | Token claim that identifies the caller. Must be the key used by the ownership source. |  |
 | `JWT_ISSUER` | empty | Agent runtime: token issuer to verify against. | required for the agent runtime |
@@ -45,7 +47,8 @@ defaults. Passing it does not mean the deployment is approved or has been tested
 | `DATABRICKS_VIEW_ENTRA_FAILURES` | empty | Three-part view name. |  |
 | `DATABRICKS_TOKEN_SECRET_ARN` | empty | Secret holding the read-only Databricks token. |  |
 | `DATABRICKS_TOKEN` | empty | Plain token. Local runs only. | must be empty |
-| `MODEL_ROUTE` | `bedrock` | bedrock for a direct call, gateway for a central OpenAI-compatible model gateway. | owner decision |
+| `MODEL_ROUTE` | `bedrock` | gateway for the governed central model gateway, off for no model call, bedrock for a direct call. With live evidence, bedrock is refused unless MODEL_ROUTE_EXCEPTION holds an approval reference. | must be gateway, or off, or carry an approved exception |
+| `MODEL_ROUTE_EXCEPTION` | empty | Approval reference that permits the direct model route with live evidence, such as a change or risk record number. Recorded on every audit line while in use. |  |
 | `MODEL_ID` | empty | Model or inference profile used for the explanation. | required |
 | `ROUTER_MODEL_ID` | empty | Agent runtime: model used only to choose a tool. Defaults to MODEL_ID. |  |
 | `MODEL_GATEWAY_URL` | empty | Gateway base URL. https only. | required when the route is gateway |

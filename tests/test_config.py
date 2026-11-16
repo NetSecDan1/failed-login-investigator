@@ -10,7 +10,8 @@ GOOD = {"DATA_BUCKET": "b", "MODEL_ID": "m", "ALLOW_TEST_CLAIMS": "false", "OWNE
         "RATE_LIMIT_TABLE": "t", "EVIDENCE_BACKEND": "splunk", "SPLUNK_BASE_URL": "https://s.example.test:8089",
         "SPLUNK_INDEX_WINDOWS": "wineventlog", "SPLUNK_INDEX_ENTRA": "signin", "SPLUNK_TOKEN_SECRET_ARN": "arn:x",
         "EXPECTED_REPORTING_HOSTS": "6", "MODEL_ROUTE": "gateway", "MODEL_GATEWAY_URL": "https://g.example.test/v1",
-        "MODEL_GATEWAY_TOKEN_SECRET_ARN": "arn:y", "METRICS_EMF": "true"}
+        "MODEL_GATEWAY_TOKEN_SECRET_ARN": "arn:y", "METRICS_EMF": "true", "DEPLOYMENT_STAGE": "production",
+        "FUNCTION_RUNTIME_EXCEPTION": "CHG-1001"}
 
 
 def blocks(env, runtime="function"):
@@ -88,3 +89,17 @@ def test_preflight_understands_source_lists_and_switches():
     all_off = pre.check(dict(ok, SOURCES_DISABLED="graph,loganalytics"))
     assert ("WARN", "SOURCES_DISABLED", "every source for entra_failures is switched off, every report will carry that gap") in all_off
     assert "EVIDENCE_SOURCES" in blocks(dict(ok, EVIDENCE_SOURCES="failed_logins=splunk+graph"))
+
+
+def test_preflight_holds_a_deployment_to_the_supported_path():
+    assert "DEPLOYMENT_STAGE" in blocks(dict(GOOD, DEPLOYMENT_STAGE="integration"))
+    assert "DEPLOYMENT_STAGE" in blocks(dict(GOOD, DEPLOYMENT_STAGE=""))
+    assert "FUNCTION_RUNTIME_EXCEPTION" in blocks(dict(GOOD, FUNCTION_RUNTIME_EXCEPTION=""))            # plain function, no approval
+    agent = dict(GOOD, FUNCTION_RUNTIME_EXCEPTION="", JWT_ISSUER="https://i.example.test", JWT_AUDIENCE="a", JWT_JWKS_URL="https://i.example.test/k")
+    assert not blocks(agent, "agent")                                                                   # the supported shape needs none
+    assert "MODEL_ROUTE" in blocks(dict(GOOD, MODEL_ROUTE="bedrock"))
+    direct = pre.check(dict(GOOD, MODEL_ROUTE="bedrock", MODEL_ROUTE_EXCEPTION="RISK-42", GUARDRAIL_ID="g", GUARDRAIL_VERSION="3"))
+    assert not [f for f in direct if f[0] == "BLOCK"]
+    assert ("WARN", "MODEL_ROUTE_EXCEPTION", "running on an approved exception (RISK-42), not the supported path") in direct
+    assert ("WARN", "FUNCTION_RUNTIME_EXCEPTION", "running on an approved exception (CHG-1001), not the supported path") in pre.check(GOOD)
+    assert not blocks(dict(GOOD, MODEL_ROUTE="off"))
