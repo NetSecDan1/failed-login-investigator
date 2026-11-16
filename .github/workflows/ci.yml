@@ -10,8 +10,8 @@ jobs:
     name: unit tests and coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "3.13", cache: pip}
       - run: pip install -r requirements-dev.txt
       - run: python tools/build_skill_index.py --check
@@ -20,14 +20,14 @@ jobs:
     name: offline evaluation (golden cases and adversarial suite)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "3.13"}
       - name: Golden cases with a scripted stand-in model (code path only)
         run: python tools/run_evals.py --json golden-scorecard.json
       - name: Adversarial suite with scripted hostile models
         run: python tools/redteam.py | tee adversarial-scorecard.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: evaluation-${{ github.sha }}
           path: |
@@ -38,8 +38,8 @@ jobs:
     name: lint (correctness rules)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "3.13"}
       - run: pip install ruff==0.17.5
       - run: ruff check .
@@ -48,8 +48,8 @@ jobs:
     name: static security analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "3.13"}
       - run: pip install bandit==1.9.4
       - name: Shipped code, all severities
@@ -60,8 +60,8 @@ jobs:
     name: dependency vulnerability audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "3.13"}
       - run: pip install pip-audit==2.10.1
       - run: pip-audit -r agent/requirements.txt
@@ -70,15 +70,15 @@ jobs:
     name: secret scan (full history)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: {fetch-depth: 0}
       - run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 detect --source /repo --redact --no-banner
   infrastructure:
     name: infrastructure template lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "3.13"}
       - run: pip install cfn-lint==1.60.1
       - run: cfn-lint template.yaml infra/github-oidc.yaml
@@ -86,7 +86,7 @@ jobs:
     name: agent container build, smoke test and vulnerability scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build the agent image
         run: docker build -f agent/Dockerfile -t fli-agent:ci .
       - name: Image runs as a non-root user
@@ -108,7 +108,7 @@ jobs:
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
             ghcr.io/aquasecurity/trivy@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb \
             image --severity HIGH,CRITICAL --ignore-unfixed --no-progress --exit-code 1 fli-agent:ci | tee image-vulnerabilities.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: image-vulnerabilities-${{ github.sha }}
@@ -120,8 +120,8 @@ jobs:
     needs: [test, evaluation, lint, static-security, dependencies, secrets, infrastructure, container]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "3.13"}
       - name: Build function package
         run: |
@@ -140,7 +140,7 @@ jobs:
           sha256sum function.zip skills.tar.gz agent-dependency-inventory.txt agent-sbom.cdx.json > SHA256SUMS
           echo "commit ${GITHUB_SHA}" >> SHA256SUMS
           cat SHA256SUMS
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-candidate-${{ github.sha }}
           path: |
@@ -150,7 +150,7 @@ jobs:
             agent-sbom.cdx.json
             SHA256SUMS
           retention-days: 30
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: console-bundle-${{ github.sha }}
           path: console-bundle/

@@ -24,13 +24,13 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
       MODEL_ID: ${{ inputs.model_id || vars.BEDROCK_MODEL_ID || 'us.anthropic.claude-sonnet-5-5' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: Test before deploy
         run: pip install -r requirements-dev.txt && python -m pytest -q tests
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
