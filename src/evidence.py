@@ -1,7 +1,7 @@
 """Read tools. Fixed shapes only: (account, start, end). No free-text queries.
 
 The three functions below are the whole tool surface. Which system answers them is chosen by
-EVIDENCE_BACKEND (file, splunk or databricks) in src/backends.py.
+EVIDENCE_BACKEND and EVIDENCE_SOURCES in src/adapters.py.
 """
 import backends
 

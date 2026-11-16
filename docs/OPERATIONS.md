@@ -12,6 +12,7 @@ One `AUDIT` line per request, as JSON on standard output:
 | `ts`, `request_id`, `route`, `latency_ms` | Troubleshooting |
 | `caller`, `scope_hash` | Audit: who asked, and a hash of what they were allowed to see |
 | `account`, `window`, `query_ids` | Audit: what was asked about and which evidence queries ran |
+| `source_errors`, `sources_passed_over` | Troubleshooting: why a source gave nothing, and when a later source in a list covered for an earlier one |
 | `outcome` (`report`, `facts_only`, `denied`, `listed`, `error`), `reason` | Audit and quality |
 | `candidates`, `classification`, `must_escalate`, `skills_version` | Evaluation: what code allowed, what was chosen, which skill text |
 | `model`, `route_to_model`, `guardrail`, `tokens_in`, `tokens_out`, `model_calls`, `validator_rejects` | Cost and model quality |
@@ -82,6 +83,13 @@ When off, no identity, ownership, evidence or model call happens. Switch back on
 For a faster stop, set the function's reserved concurrency to zero. To remove everything, run `./teardown.sh`.
 Because the agent changes nothing in any identity system, there is no data to roll back.
 
+### Switching one evidence source off
+
+To pull a single source and leave the rest running, use `SOURCES_DISABLED` or the switch file described in
+`docs/SOURCES.md`. With the switch file configured, upload `examples/switches/cloud-api-off.json` to the switch key
+and the change applies within a minute. Upload `all-on.json`, or delete the object, to restore it. Reports state
+the gap while a kind has no source, and nothing else changes.
+
 ## Runbook: common situations
 
 | Symptom | Likely cause | Action |
@@ -89,6 +97,8 @@ Because the agent changes nothing in any identity system, there is no data to ro
 | Every caller gets `ownership_unavailable` or `ownership_stale` | Ownership file missing, unreadable or older than `OWNERSHIP_MAX_AGE_HOURS` | Fix the export. Do not raise the limit to make the error go away |
 | Reports list a source under gaps | Log platform unreachable, token expired, or field map mismatch | See `source_errors` in the audit line, then `docs/SOURCES.md` |
 | `summary_withheld:guardrail_intervened` on ordinary requests | Guardrail too broad | Review the guardrail trace and tune the topic definition |
+| Every report says `switch_file_invalid` | The switch file is unreadable or malformed, so every switchable source is off | Replace it with a file from `examples/switches/`, or delete it |
+| `sources_passed_over` appears in audit lines | The first source in a list is failing and a later one is covering | Fix the first source. Reports are complete meanwhile, but may be less fresh or use the wider credential |
 | A report looks wrong | Skill thresholds or wording | Capture the case as a synthetic eval, fix the skill, re-run evals |
 
 ## Ownership

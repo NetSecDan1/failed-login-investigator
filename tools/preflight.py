@@ -75,7 +75,7 @@ def check(env, runtime="function"):
     except ValueError as e:
         block("EVIDENCE_SOURCES", str(e))
         routes = {}
-    for kind, source in sorted(routes.items()):
+    for kind, source in sorted((k, n) for k, names in routes.items() for n in names):
         if source == "file":
             block("EVIDENCE_BACKEND", "%s resolves to file, which is synthetic data" % kind)
         if source == "none":
@@ -87,6 +87,17 @@ def check(env, runtime="function"):
                 block(n, "is required for the %s source" % source)
             elif (n.startswith("SPLUNK_INDEX") or "_VIEW_" in n) and not IDENT.fullmatch(get(n)):
                 block(n, "must be a plain identifier")
+    try:
+        off = adapters.Switches(env_disabled=get("SOURCES_DISABLED"), known=set(adapters.REGISTRY) - set(adapters.UNSWITCHED)).static
+    except ValueError as e:
+        block("SOURCES_DISABLED", str(e))
+        off = frozenset()
+    for kind, names in sorted(routes.items()):
+        if names != ("none",) and all(n in off for n in names):
+            (block if kind == "failed_logins" else warn)("SOURCES_DISABLED", "every source for %s is switched off, every report will carry that gap" % kind)
+    key = get("SOURCE_SWITCH_KEY")
+    if key and not re.fullmatch(r"[A-Za-z0-9._/-]{1,200}", key):
+        block("SOURCE_SWITCH_KEY", "must be a plain object key")
 
     route = get("MODEL_ROUTE").lower()
     if route == "gateway":

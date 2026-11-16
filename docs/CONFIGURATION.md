@@ -19,7 +19,9 @@ defaults. Passing it does not mean the deployment is approved or has been tested
 | `RATE_LIMIT_PER_HOUR` | `0` | Investigations allowed per caller per clock hour. 0 is off. | must be above 0 |
 | `RATE_LIMIT_TABLE` | empty | Counter table shared by all instances. Empty keeps the count in one process. | required when the limit is on |
 | `EVIDENCE_BACKEND` | `file` | Default evidence source for every kind: file (synthetic), none, splunk, databricks, export, graph or loganalytics. | must not be file |
-| `EVIDENCE_SOURCES` | empty | Per-kind overrides of the default, such as failed_logins=splunk,entra_failures=graph. Kinds: failed_logins, account_events, entra_failures. | no kind may resolve to file |
+| `EVIDENCE_SOURCES` | empty | Per-kind overrides of the default, such as failed_logins=splunk,entra_failures=graph. A kind may list several sources joined with +, tried in order, such as entra_failures=loganalytics+graph. Kinds: failed_logins, account_events, entra_failures. | no kind may resolve to file |
+| `SOURCES_DISABLED` | empty | Comma-separated source names to turn off without changing routes, such as graph. A switched-off source is skipped and the next one in the list for that kind is used. With none left, the report states the gap. |  |
+| `SOURCE_SWITCH_KEY` | empty | Object key of the operator switch file in the data bucket, such as runtime/switches.json. When set, the file is re-read every minute and may turn sources off while the service runs. It cannot turn on a source that is not in the routes. Empty means no switch file is read. |  |
 | `EXPORT_PREFIX` | `exports` | Folder in the data bucket where scheduled report exports land, for the export source. |  |
 | `ENTRA_TENANT_ID` | empty | Cloud identity tenant, for the graph and loganalytics sources. | required for graph or loganalytics |
 | `ENTRA_CLIENT_ID` | empty | Read-only application identity used by the graph and loganalytics sources. | required for graph or loganalytics |

@@ -193,9 +193,11 @@ def test_export_refuses_oversized_files_and_reads_json_arrays():
 
 def test_routes_are_parsed_strictly():
     r = adapters.parse_routes("splunk", "entra_failures=graph, account_events = export")
-    assert r == {"failed_logins": "splunk", "account_events": "export", "entra_failures": "graph"}
-    assert adapters.parse_routes("file", "") == {k: "file" for k in ("failed_logins", "account_events", "entra_failures")}
-    for bad in ("entra=graph", "entra_failures=oracle", "entra_failures", "failed_logins=splunk;rm"):
+    assert r == {"failed_logins": ("splunk",), "account_events": ("export",), "entra_failures": ("graph",)}
+    assert adapters.parse_routes("file", "") == {k: ("file",) for k in ("failed_logins", "account_events", "entra_failures")}
+    assert adapters.parse_routes("splunk", "entra_failures= LogAnalytics + graph")["entra_failures"] == ("loganalytics", "graph")
+    for bad in ("entra=graph", "entra_failures=oracle", "entra_failures", "failed_logins=splunk;rm", "entra_failures=graph+graph",
+                "entra_failures=none+graph", "entra_failures=graph+", "entra_failures=graph+oracle"):
         with pytest.raises(ValueError):
             adapters.parse_routes("file", bad)
     with pytest.raises(ValueError):
@@ -231,7 +233,8 @@ def test_registry_builds_one_backend_or_a_router_from_settings(monkeypatch):
     monkeypatch.setenv("EVIDENCE_SOURCES", "entra_failures=none,account_events=export")
     b = adapters.make_backend(STORE)
     assert type(b).__name__ == "RoutedBackend"
-    assert [type(b.routes[k]).__name__ for k in ("failed_logins", "account_events", "entra_failures")] == ["FileBackend", "ExportBackend", "NullBackend"]
+    assert [type(b.routes[k]).__name__ for k in ("failed_logins", "account_events", "entra_failures")] == ["FileBackend", "ChainBackend", "NullBackend"]
+    assert [(n, type(m).__name__) for n, m in b.routes["account_events"].members] == [("export", "ExportBackend")]
 
 
 def test_sign_in_name_comes_from_the_ownership_source_never_the_request():
@@ -277,3 +280,139 @@ def test_object_store_reports_absent_objects_as_missing_and_other_errors_as_erro
     s.s3 = Client("AccessDenied")
     with pytest.raises(Boom):
         s.get("x")
+
+
+# ---------- several sources for one kind, and operator switches ----------
+
+LA_ROW = {"tables": [{"columns": [{"name": c} for c in ("TimeGenerated", "UserPrincipalName", "ResultType", "ClientAppUsed", "AppDisplayName", "IPAddress")],
+                      "rows": [["2026-11-12T13:05:00Z", UPN, "50126", "IMAP4", "Mail", "198.51.100.9"]]}]}
+KNOWN = set(adapters.REGISTRY) - set(adapters.UNSWITCHED)
+
+
+def two_cloud_sources(la_net, graph_net, switches=None):
+    return adapters.ChainBackend([("loganalytics", make("loganalytics", la_net)), ("graph", make("graph", graph_net))], switches)
+
+
+def ask(chain, account="svc-batch01", scope_set=S):
+    return chain.query("entra_failures", account, T0, T1, scope_set, UPN)
+
+
+def test_first_source_that_answers_wins_and_a_quiet_account_is_an_answer():
+    la, graph = Net({"/query": LA_ROW}), Net({"/signIns": {"value": [SIGNIN]}})
+    r = ask(two_cloud_sources(la, graph))
+    assert r["query_id"].startswith("loganalytics:") and len(r["rows"]) == 1 and "passed_over" not in r
+    assert graph.calls == []
+    quiet, graph = Net({"/query": {"tables": [{"columns": [], "rows": []}]}}), Net({"/signIns": {"value": [SIGNIN]}})
+    r = ask(two_cloud_sources(quiet, graph))
+    assert r["rows"] == [] and "error" not in r and graph.calls == []          # no rows is not a reason to ask someone else
+
+
+def test_a_failing_source_is_passed_over_and_the_audit_trail_says_so():
+    la, graph = Net(boom=OSError("workspace down")), Net({"/signIns": {"value": [SIGNIN]}})
+    r = ask(two_cloud_sources(la, graph))
+    assert r["query_id"].startswith("graph:") and len(r["rows"]) == 1
+    assert r["passed_over"] == ["loganalytics:source_unavailable"]
+    both_down = ask(two_cloud_sources(Net(boom=OSError("a")), Net(boom=OSError("b"))))
+    assert both_down["error"] == "source_unavailable" and both_down["rows"] == []
+
+
+def test_a_switched_off_source_is_never_called():
+    la, graph = Net({"/query": LA_ROW}), Net({"/signIns": {"value": [SIGNIN]}})
+    r = ask(two_cloud_sources(la, graph, adapters.Switches(env_disabled="loganalytics", known=KNOWN)))
+    assert r["query_id"].startswith("graph:") and la.calls == []
+    la, graph = Net({"/query": LA_ROW}), Net({"/signIns": {"value": [SIGNIN]}})
+    chain = two_cloud_sources(la, graph, adapters.Switches(env_disabled="graph, loganalytics", known=KNOWN))
+    r = ask(chain)
+    assert r == {"query_id": "off:entra_failures:svc-batch01", "rows": [], "truncated": False, "error": "source_switched_off"}
+    assert chain.health(T0, T1) == {"windows": "not_configured", "entra": "not_configured"}
+    assert la.calls == [] and graph.calls == []
+
+
+def test_the_switch_file_takes_effect_while_running_and_can_only_turn_things_off():
+    files, now = {}, [1000.0]
+    sw = adapters.Switches(evidence.DictStore(files), "runtime/switches.json", known=KNOWN, clock=lambda: now[0])
+    assert sw.state() == (frozenset(), None)                                   # no file: nothing is off
+    files["runtime/switches.json"] = json.dumps({"disabled_sources": ["Graph"]})
+    assert not sw.is_off("graph")                                              # still inside the cache window
+    now[0] += 61
+    assert sw.is_off("graph") and not sw.is_off("loganalytics")
+    files["runtime/switches.json"] = json.dumps({"disabled_sources": [], "enabled_sources": ["databricks"], "routes": {"entra_failures": "file"}})
+    now[0] += 61
+    assert sw.state() == (frozenset(), None)                                   # unknown keys do nothing: there is no "on"
+    la, graph = Net({"/query": LA_ROW}), Net({"/signIns": {"value": [SIGNIN]}})
+    assert ask(two_cloud_sources(la, graph, sw))["query_id"].startswith("loganalytics:")
+
+
+@pytest.mark.parametrize("content", ["{not json", json.dumps(["graph"]), json.dumps({"disabled_sources": "graph"}),
+                                     json.dumps({"disabled_sources": ["oracle"]}), json.dumps({"disabled_sources": ["file"]})])
+def test_a_switch_file_that_cannot_be_understood_turns_every_source_off(content):
+    sw = adapters.Switches(evidence.DictStore({"runtime/switches.json": content}), "runtime/switches.json", known=KNOWN)
+    off, problem = sw.state()
+    assert off == KNOWN and problem.startswith("switch_file_invalid")
+    la, graph = Net({"/query": LA_ROW}), Net({"/signIns": {"value": [SIGNIN]}})
+    r = ask(two_cloud_sources(la, graph, sw))
+    assert r["error"].startswith("switch_file_invalid") and r["rows"] == [] and la.calls == [] and graph.calls == []
+
+
+def test_an_unreadable_switch_file_is_not_mistaken_for_no_file():
+    class Broken:
+        def get(self, key):
+            raise PermissionError("denied")
+    assert adapters.Switches(Broken(), "runtime/switches.json", known=KNOWN).state()[0] == KNOWN
+
+
+def test_scope_is_checked_before_the_switch_file_or_any_source():
+    class Counting(evidence.DictStore):
+        reads = 0
+        def get(self, key):
+            Counting.reads += 1
+            return super().get(key)
+    la, graph = Net({"/query": LA_ROW}), Net()
+    chain = two_cloud_sources(la, graph, adapters.Switches(Counting({}), "runtime/switches.json", known=KNOWN))
+    with pytest.raises(scope.Denied):
+        ask(chain, account="svc-payroll01")
+    assert Counting.reads == 0 and la.calls == [] and graph.calls == []
+
+
+def test_settings_reject_unknown_names_in_the_switch():
+    with pytest.raises(ValueError):
+        adapters.Switches(env_disabled="oracle", known=KNOWN)
+    with pytest.raises(ValueError):
+        adapters.Switches(env_disabled="none", known=KNOWN)
+
+
+def test_registry_builds_a_switchable_chain_from_settings(monkeypatch):
+    for k, v in {"EVIDENCE_BACKEND": "file", "EVIDENCE_SOURCES": "entra_failures=loganalytics+graph", "SOURCES_DISABLED": "graph",
+                 "SOURCE_SWITCH_KEY": "runtime/switches.json", "ENTRA_TENANT_ID": TENANT, "ENTRA_CLIENT_ID": CLIENT,
+                 "ENTRA_CLIENT_SECRET": "s3cret", "LOGANALYTICS_WORKSPACE_ID": WORKSPACE}.items():
+        monkeypatch.setenv(k, v)
+    chain = adapters.make_backend(STORE).routes["entra_failures"]
+    assert [n for n, _ in chain.members] == ["loganalytics", "graph"]
+    assert [n for n, _ in chain._live()[0]] == ["loganalytics"]
+    assert chain.switches.key == "runtime/switches.json"
+
+
+def test_with_cloud_sources_switched_off_the_report_states_the_gap_and_still_explains(capsys):
+    chain = two_cloud_sources(Net(), Net(), adapters.Switches(env_disabled="graph,loganalytics", known=KNOWN))
+    file = backends.FileBackend(STORE)
+    routed = adapters.RoutedBackend({"failed_logins": file, "account_events": file, "entra_failures": chain})
+    r = handler.handler(ev("E1001", "svc-batch01"), None, store=STORE, model=no_model, backend=routed)
+    assert r["candidates"]["allowed"][0] == "stale-credential"
+    assert "entra_failures: source_switched_off" in r["facts"]["gaps"]
+    assert r["facts"]["source_health"]["entra"] == "not_configured"
+
+
+def test_the_audit_line_records_which_source_was_passed_over(capsys):
+    chain = two_cloud_sources(Net(boom=OSError("down")), Net({"/signIns": {"value": []}}))
+    file = backends.FileBackend(STORE)
+    routed = adapters.RoutedBackend({"failed_logins": file, "account_events": file, "entra_failures": chain})
+    files = dict(STORE.d)
+    own = json.loads(files["ownership/ownership.json"])
+    own["owners"]["E1001"][0]["signin_name"] = UPN
+    files["ownership/ownership.json"] = json.dumps(own)
+    assert own["owners"]["E1001"][0]["account"] == "svc-batch01"
+    handler.handler(ev("E1001", "svc-batch01"), None, store=evidence.DictStore(files), model=no_model, backend=routed)
+    line = [l for l in capsys.readouterr().out.splitlines() if l.startswith("AUDIT ")][-1]
+    audit = json.loads(line[6:])
+    assert audit["sources_passed_over"] == {"entra_failures": ["loganalytics:source_unavailable"]}
+    assert audit["query_ids"][2].startswith("graph:")

@@ -50,6 +50,43 @@ cloud kind to a real source later. That switch is one setting and no code. Until
 work, the cloud-side skills simply never become eligible, and each report states that cloud sign-in evidence
 is not configured.
 
+## More than one source for a kind
+
+A kind can list several sources, joined with `+` and tried in order:
+
+```bash
+EVIDENCE_SOURCES=entra_failures=loganalytics+graph
+```
+
+The first source that is switched on and answers wins. An answer with no rows is still an answer, so a quiet
+account never triggers a second lookup. A source is passed over only when it is switched off, failing, or cannot
+answer that kind. When a later source covers for an earlier one, the audit line records it under
+`sources_passed_over`, and the query reference in the report names the source that actually answered.
+
+Put the source with the narrower access first. In the example the workspace query is the everyday path and the
+sign-in log API is held in reserve.
+
+## Switching a source on or off while running
+
+Every configured source can be turned off without a deployment, and turned back on the same way. There are two
+switches, and both can only take a source away. Neither can add a source, change a route or point a kind at
+synthetic data, so the worst a mistaken or malicious switch can do is produce a report that states a gap.
+
+| Switch | How | Takes effect |
+|--------|-----|--------------|
+| `SOURCES_DISABLED=graph` | A setting on the workload | When the setting is saved |
+| Switch file | Set `SOURCE_SWITCH_KEY=runtime/switches.json`, then put `{"disabled_sources": ["graph"]}` at that key in the data bucket | Within one minute, no restart |
+
+Ready-made switch files are in `examples/switches/`. Behavior to rely on:
+
+- No switch file means nothing extra is off.
+- A switch file that exists but cannot be read or understood turns every switchable source off, and each report
+  says `switch_file_invalid`. An operator who meant to pull a source and made a typo must not find it still running.
+- With every source for a kind off, the report states `source_switched_off` for that kind and the remaining
+  evidence is still explained.
+- Write access to the switch key is an operational control. Give it to the people allowed to pull a source, and
+  keep bucket versioning on so every flip has a history.
+
 ## Cloud sign-in evidence: choosing a path
 
 Directory events and cloud sign-ins often live in different places. These are the realistic ways to get the
@@ -72,7 +109,10 @@ How to decide:
 3. **If the long-term log home is a lakehouse, measure its lag first.** Run the source health check and compare the
    newest row with the clock. Lockout questions are asked while the lockout is happening. A source that is hours
    behind will answer "nothing found" to a real problem.
-4. **A mixed setup is normal.** Directory evidence from one source and cloud evidence from another is exactly what
+4. **A and B together are a reasonable pair.** Route the cloud kind to `loganalytics+graph` so the scoped workspace
+   is the everyday path and the API covers a workspace outage, or run with the API switched off until its sign-off
+   lands. Both are built, and either can be turned off at run time.
+5. **A mixed setup is normal.** Directory evidence from one source and cloud evidence from another is exactly what
    per-kind routing is for.
 
 Whatever the path, the account's cloud sign-in name comes from the ownership source (`signin_name`), never from a
@@ -177,7 +217,17 @@ python tools/import_ownership.py report.csv --out data/ownership/ownership.json 
 5. Map its field names in `config/field_map.json`.
 6. Record in `docs/STATUS.md` that it is tested against fake responses only, until it has run live.
 
+### Directory auditing products
+
+A directory auditing product that schedules reports is covered by this adapter today: schedule its failed-logon,
+lockout and password-change reports to the layout above and map its column names in `config/field_map.json`. That
+is a file hand-off, not a live query, so evidence is as fresh as the schedule. A direct adapter is only worth
+writing for a product with a documented, read-only query interface the workload is allowed to call. If the
+product can forward its events to the log platform already in use, that route needs no adapter at all.
+
 ## Not built yet
+
+- A direct query adapter for a directory auditing product. The scheduled export path above is what exists.
 
 - A live ownership API adapter, and non-interactive sign-ins through the sign-in log API.
 - Paging beyond the row caps.

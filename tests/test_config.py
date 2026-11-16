@@ -74,3 +74,17 @@ def test_per_kind_routes_are_checked():
     none_yet = pre.check(dict(GOOD, EVIDENCE_SOURCES="entra_failures=none", SPLUNK_INDEX_ENTRA=""))
     assert ("WARN", "EVIDENCE_SOURCES", "entra_failures has no source, every report will carry that gap") in none_yet
     assert not [f for f in none_yet if f[0] == "BLOCK"]
+
+
+def test_preflight_understands_source_lists_and_switches():
+    cloud = dict(GOOD, ENTRA_TENANT_ID="t", ENTRA_CLIENT_ID="c", ENTRA_CLIENT_SECRET_ARN="arn", SPLUNK_INDEX_ENTRA="")
+    both = dict(cloud, EVIDENCE_SOURCES="entra_failures=loganalytics+graph")
+    assert "LOGANALYTICS_WORKSPACE_ID" in blocks(both)
+    ok = dict(both, LOGANALYTICS_WORKSPACE_ID="w")
+    assert not blocks(ok)
+    assert not blocks(dict(ok, SOURCES_DISABLED="graph", SOURCE_SWITCH_KEY="runtime/switches.json"))
+    assert "SOURCES_DISABLED" in blocks(dict(ok, SOURCES_DISABLED="oracle"))
+    assert "SOURCE_SWITCH_KEY" in blocks(dict(ok, SOURCE_SWITCH_KEY="runtime/../x y"))
+    all_off = pre.check(dict(ok, SOURCES_DISABLED="graph,loganalytics"))
+    assert ("WARN", "SOURCES_DISABLED", "every source for entra_failures is switched off, every report will carry that gap") in all_off
+    assert "EVIDENCE_SOURCES" in blocks(dict(ok, EVIDENCE_SOURCES="failed_logins=splunk+graph"))

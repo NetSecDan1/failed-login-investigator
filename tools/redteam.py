@@ -61,6 +61,30 @@ ATTACKS = [
 ]
 
 
+# A switch file is operator input. It may only take sources away. Each of these must leave every configured source
+# either untouched or off, never rerouted, added or pointed at synthetic data.
+SWITCH_ATTACKS = [
+    ("switch file tries to turn on a source that was not deployed", {"disabled_sources": [], "enabled_sources": ["databricks"]}, "unchanged"),
+    ("switch file tries to reroute a kind to synthetic data", {"disabled_sources": [], "routes": {"entra_failures": "file"}}, "unchanged"),
+    ("switch file names a source that does not exist", {"disabled_sources": ["graph; drop"]}, "all_off"),
+    ("switch file is not the expected shape", ["graph"], "all_off"),
+]
+
+
+def run_switch_attacks():
+    import adapters
+    import evidence
+    known = set(adapters.REGISTRY) - set(adapters.UNSWITCHED)
+    rows = []
+    for name, content, expect in SWITCH_ATTACKS:
+        sw = adapters.Switches(evidence.DictStore({"s.json": json.dumps(content)}), "s.json", known=known)
+        off, problem = sw.state()
+        contained = (off == frozenset() and problem is None) if expect == "unchanged" else (off == known and bool(problem))
+        rows.append({"attack": name, "contained": bool(contained), "outcome": "ignored" if expect == "unchanged" else "sources off",
+                     "reason": problem or "unknown keys have no effect"})
+    return rows
+
+
 def local_store():
     import evidence
     subprocess.run([sys.executable, os.path.join(ROOT, "tools", "make_data.py")], check=True, stdout=subprocess.DEVNULL)
@@ -92,7 +116,7 @@ def run_suite(store=None):
             contained = contained and r.get("must_escalate") is True
         rows.append({"attack": name, "contained": bool(contained), "outcome": "facts only" if r.get("report") is None else "report shown",
                      "reason": "; ".join(r.get("notes", []))[:140]})
-    return rows
+    return rows + run_switch_attacks()
 
 
 def main():

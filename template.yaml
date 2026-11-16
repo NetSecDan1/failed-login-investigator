@@ -69,7 +69,16 @@ Parameters:
   EvidenceSources:
     Type: String
     Default: ""
-    Description: Optional per-kind overrides, for example failed_logins=splunk,account_events=splunk,entra_failures=none
+    Description: Optional per-kind overrides, for example failed_logins=splunk,account_events=splunk,entra_failures=loganalytics+graph
+  SourcesDisabled:
+    Type: String
+    Default: ""
+    Description: Optional source names to switch off, for example graph
+  SourceSwitchKey:
+    Type: String
+    Default: ""
+    AllowedPattern: "^[A-Za-z0-9._/-]{0,200}$"
+    Description: Optional key of an operator switch file in the data bucket, for example runtime/switches.json
   ExportPrefix: {Type: String, Default: exports}
   EntraTenantId: {Type: String, Default: ""}
   EntraClientId: {Type: String, Default: ""}
@@ -266,6 +275,8 @@ Resources:
           GUARDRAIL_VERSION: DRAFT
           EVIDENCE_BACKEND: !Ref EvidenceBackend
           EVIDENCE_SOURCES: !Ref EvidenceSources
+          SOURCES_DISABLED: !Ref SourcesDisabled
+          SOURCE_SWITCH_KEY: !Ref SourceSwitchKey
           EXPORT_PREFIX: !Ref ExportPrefix
           ENTRA_TENANT_ID: !Ref EntraTenantId
           ENTRA_CLIENT_ID: !Ref EntraClientId

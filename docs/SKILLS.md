@@ -87,7 +87,7 @@ signals never make a skill eligible, and the index is current.
 |---------|------------------|-------|
 | `python -m pytest -q tests/test_skills.py` | Code offers the expected skill first for each golden case | nothing |
 | `python tools/run_evals.py` | The whole pipeline on the 15 golden cases with a scripted stand-in model. Code path only | nothing |
-| `python tools/redteam.py` | 21 scripted hostile models, each of which code must contain | nothing |
+| `python tools/redteam.py` | 21 scripted hostile models and 4 hostile switch files, each of which code must contain | nothing |
 | `MODEL_ID=... python tools/run_evals.py --model live` | A real model's choices, rejects and tokens per passed case, through `MODEL_ROUTE` | model access |
 | `python tools/run_evals.py --target function` | The same against a deployed function | a deployment |
 

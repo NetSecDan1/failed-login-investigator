@@ -134,7 +134,8 @@ jobs:
           cyclonedx-py environment .sbom --output-format JSON --output-file agent-sbom.cdx.json
           # A ready-to-upload bundle: template, function package, bucket contents and test events.
           python tools/build_skill_index.py --check && python tools/make_data.py
-          mkdir -p console-bundle/bucket console-bundle/test-events
+          mkdir -p console-bundle/bucket console-bundle/test-events console-bundle/switches
+          cp examples/switches/*.json console-bundle/switches/
           cp template.yaml function.zip docs/DEPLOY_CONSOLE.md console-bundle/
           cp -r skills console-bundle/bucket/skills && cp -r data/ownership data/evidence console-bundle/bucket/
           cp examples/events/*.json console-bundle/test-events/

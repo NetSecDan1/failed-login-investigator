@@ -135,6 +135,7 @@ def _run(event, context, store, model, backend, reference):
         pack = evidence.collect(account, start, end, scope_set, source, account_meta[account]["signin_name"])
         audit["query_ids"] = pack["query_ids"]
         audit["source_errors"] = {k: pack[k]["error_detail"] for k in backends.ROW_CAP if pack[k].get("error_detail")}
+        audit["sources_passed_over"] = {k: pack[k]["passed_over"] for k in backends.ROW_CAP if pack[k].get("passed_over")}
 
         # 5. Findings (all numbers computed here, never by the model).
         health = source.health(start, end) if os.environ.get("SOURCE_HEALTH_CHECK", "true").lower() == "true" else None

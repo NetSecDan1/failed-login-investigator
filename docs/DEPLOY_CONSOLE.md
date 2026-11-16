@@ -101,6 +101,18 @@ Change settings through the stack, not on the function, so the next stack update
 
 Every parameter is described in [`CONFIGURATION.md`](CONFIGURATION.md) under its setting name.
 
+## Turning an evidence source off or on
+
+1. In the stack parameters, set **SourceSwitchKey** to `runtime/switches.json` and update the stack. This is done once.
+2. Open the data bucket in the S3 console and create the folder `runtime`.
+3. To turn a source off, take a file from `switches/` in the bundle, rename it `switches.json` and upload it into
+   `runtime`. `cloud-api-off.json` turns off the sign-in log API and leaves everything else running.
+4. Wait one minute, run a test event, and check that the report lists the gap you expect or names the other source.
+5. To turn it back on, upload `all-on.json` under the same name, or delete the object.
+
+The switch can only turn off sources the stack already has. Adding or reordering sources is the
+**EvidenceSources** parameter, for example `entra_failures=loganalytics+graph`.
+
 ## Updating to a newer build
 
 1. Download the newer console bundle.

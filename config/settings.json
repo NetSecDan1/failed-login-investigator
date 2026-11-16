@@ -70,8 +70,20 @@
   {
    "name": "EVIDENCE_SOURCES",
    "default": "",
-   "purpose": "Per-kind overrides of the default, such as failed_logins=splunk,entra_failures=graph. Kinds: failed_logins, account_events, entra_failures.",
+   "purpose": "Per-kind overrides of the default, such as failed_logins=splunk,entra_failures=graph. A kind may list several sources joined with +, tried in order, such as entra_failures=loganalytics+graph. Kinds: failed_logins, account_events, entra_failures.",
    "production": "no kind may resolve to file"
+  },
+  {
+   "name": "SOURCES_DISABLED",
+   "default": "",
+   "purpose": "Comma-separated source names to turn off without changing routes, such as graph. A switched-off source is skipped and the next one in the list for that kind is used. With none left, the report states the gap.",
+   "production": null
+  },
+  {
+   "name": "SOURCE_SWITCH_KEY",
+   "default": "",
+   "purpose": "Object key of the operator switch file in the data bucket, such as runtime/switches.json. When set, the file is re-read every minute and may turn sources off while the service runs. It cannot turn on a source that is not in the routes. Empty means no switch file is read.",
+   "production": null
   },
   {
    "name": "EXPORT_PREFIX",

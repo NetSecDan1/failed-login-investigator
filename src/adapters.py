@@ -5,6 +5,13 @@ Each kind of evidence can come from a different source:
   EVIDENCE_BACKEND=splunk                                   one source for everything, or
   EVIDENCE_SOURCES=failed_logins=splunk,account_events=splunk,entra_failures=graph
 
+A kind can also list several sources, tried in order, so a second source answers when the first cannot:
+
+  EVIDENCE_SOURCES=entra_failures=loganalytics+graph
+
+Operators can turn any source off while the service runs, with SOURCES_DISABLED or the switch file
+(see Switches). A switch can only take a source away. It can never add one that deployment did not configure.
+
 Adding a source means adding one class here (or in its own module), one line in REGISTRY, its settings in
 config/settings.json, and passing the shared contract tests in tests/test_adapters.py. Nothing else changes.
 
@@ -51,6 +58,102 @@ class RoutedBackend(Backend):
         for source, kind in HEALTH_KIND.items():
             one = self.routes[kind].health(start, end)
             out[source] = one.get(source) if isinstance(one, dict) else None
+        return out
+
+
+class Switches:
+    """Operator switches for evidence sources, read while the service runs.
+
+    Two inputs, both optional: the SOURCES_DISABLED setting, and a small JSON file in the data store,
+    {"disabled_sources": ["graph"]}, re-read at most once a minute. Both can only turn sources off. A source
+    that deployment did not configure cannot be switched on from here. No file means nothing extra is off. A
+    file that exists but cannot be read or understood turns every switchable source off, because an operator
+    who tried to pull a source and made a typo must not find it still running.
+    """
+    TTL = 60
+
+    def __init__(self, store=None, key="", env_disabled="", known=(), clock=time.time):
+        self.store, self.key, self.known, self.clock = store, key.strip().lstrip("/"), frozenset(known), clock
+        self.static = self._names(env_disabled.split(","))
+        self._cached, self._until = (frozenset(), None), 0
+
+    def _names(self, items):
+        names = frozenset(str(i).strip().lower() for i in items if str(i).strip())
+        unknown = names - self.known
+        if unknown:
+            raise ValueError("unknown source in switch: %s" % sorted(unknown)[0][:40])
+        return names
+
+    def _from_file(self):
+        if not (self.store and self.key):
+            return frozenset(), None
+        if self.clock() < self._until:
+            return self._cached
+        try:
+            data = json.loads(self.store.get(self.key))
+            if not isinstance(data, dict) or not isinstance(data.get("disabled_sources", []), list):
+                raise ValueError("switch file has the wrong shape")
+            self._cached = (self._names(data.get("disabled_sources", [])), None)
+        except KeyError:
+            self._cached = (frozenset(), None)
+        except Exception as e:                        # unreadable or malformed: fail toward off
+            self._cached = (self.known, "switch_file_invalid: %s" % type(e).__name__)
+        self._until = self.clock() + self.TTL
+        return self._cached
+
+    def state(self):
+        """(names that are off right now, a problem with the switch file or None)."""
+        off, problem = self._from_file()
+        return self.static | off, problem
+
+    def is_off(self, name):
+        return name in self.state()[0]
+
+
+class ChainBackend(Backend):
+    """One or more sources for a kind of evidence, tried in order.
+
+    The first source that is switched on and answers wins. An answer with no rows is an answer, so a quiet
+    account never causes a second lookup. Only a source that is off, failing or unable to answer this kind is
+    passed over. The query id in the result names the source that answered.
+    """
+    name = "chain"
+
+    def __init__(self, members, switches=None):
+        self.members, self.switches = list(members), switches or Switches()
+
+    def _live(self):
+        off, problem = self.switches.state()
+        return [(n, b) for n, b in self.members if n not in off], problem
+
+    def query(self, kind, account, start, end, scope_set, signin_name=None):
+        if account not in scope_set:                  # before the switch file or any source is touched
+            raise backends.scope.Denied("out_of_scope", "You can only investigate accounts you own.")
+        live, problem = self._live()
+        last, passed = None, []
+        for name, member in live:
+            result = member.query(kind, account, start, end, scope_set, signin_name)
+            if result.get("error") not in ("source_unavailable", "source_not_configured"):
+                if passed:                            # for the audit line: a later source covered for an earlier one
+                    result["passed_over"] = passed
+                return result
+            passed.append("%s:%s" % (name, result["error"]))
+            last = result
+        if last is not None:
+            return last
+        return {"query_id": "off:%s:%s" % (kind, account), "rows": [], "truncated": False,
+                "error": problem or "source_switched_off"}
+
+    def health(self, start, end):
+        live, _ = self._live()
+        out = {}
+        for source in ("windows", "entra"):
+            out[source] = "not_configured" if not live else None
+            for _, member in live:
+                one = member.health(start, end).get(source)
+                if one is not None:
+                    out[source] = one
+                    break
         return out
 
 
@@ -275,23 +378,44 @@ REGISTRY = {
 }
 
 
+UNSWITCHED = ("file", "none")       # synthetic data and the explicit "no source" marker are not switchable
+
+
 def parse_routes(default, spec):
-    """'failed_logins=splunk,entra_failures=graph' on top of a default. Unknown kinds or sources are an error."""
-    routes = {k: default for k in querypack.KINDS}
-    for part in filter(None, (p.strip() for p in (spec or "").split(","))):
-        kind, _, source = part.partition("=")
-        kind, source = kind.strip(), source.strip().lower()
-        if kind not in routes or source not in REGISTRY:
-            raise ValueError("bad evidence route: %s" % part)
-        routes[kind] = source
+    """'failed_logins=splunk,entra_failures=loganalytics+graph' on top of a default.
+
+    Returns {kind: (source, ...)} with sources in the order they are tried. Unknown kinds or sources are an error.
+    """
+    def chain(text, where):
+        names = tuple(n.strip().lower() for n in text.split("+"))
+        if not names or any(n not in REGISTRY for n in names) or len(set(names)) != len(names):
+            raise ValueError("bad evidence route: %s" % where)
+        if len(names) > 1 and "none" in names:
+            raise ValueError("bad evidence route: %s" % where)
+        return names
+
     if default not in REGISTRY:
         raise ValueError("unknown evidence source: %s" % default)
+    routes = {k: (default,) for k in querypack.KINDS}
+    for part in filter(None, (p.strip() for p in (spec or "").split(","))):
+        kind, _, sources = part.partition("=")
+        if kind.strip() not in routes:
+            raise ValueError("bad evidence route: %s" % part)
+        routes[kind.strip()] = chain(sources, part)
     return routes
 
 
 def make_backend(store):
     routes = parse_routes(os.environ.get("EVIDENCE_BACKEND", "file").lower(), os.environ.get("EVIDENCE_SOURCES", ""))
-    built = {name: REGISTRY[name](store) for name in set(routes.values())}
-    if len(built) == 1:
-        return next(iter(built.values()))
-    return RoutedBackend({kind: built[name] for kind, name in routes.items()})
+    switches = Switches(store, os.environ.get("SOURCE_SWITCH_KEY", ""), os.environ.get("SOURCES_DISABLED", ""),
+                        known=set(REGISTRY) - set(UNSWITCHED))
+    built = {name: REGISTRY[name](store) for names in routes.values() for name in names}
+    chains = {}
+    for names in set(routes.values()):
+        if len(names) == 1 and names[0] in UNSWITCHED:
+            chains[names] = built[names[0]]
+        else:
+            chains[names] = ChainBackend([(n, built[n]) for n in names], switches)
+    if len(chains) == 1:
+        return next(iter(chains.values()))
+    return RoutedBackend({kind: chains[names] for kind, names in routes.items()})
