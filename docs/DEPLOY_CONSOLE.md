@@ -106,8 +106,8 @@ Every parameter is described in [`CONFIGURATION.md`](CONFIGURATION.md) under its
 1. Download the newer console bundle.
 2. If `template.yaml` changed: **CloudFormation**, select `fli-proto`, **Update stack**, **Make a direct update**,
    **Replace existing template**, upload the new file, keep your parameters, **Submit**. Wait for `UPDATE_COMPLETE`.
-3. Upload the new `function.zip` as in step 3. A template update resets the code to the placeholder, so always do
-   this after it.
+3. Upload the new `function.zip` as in step 3. Do this after any template update, because an update can put the
+   placeholder code back.
 4. Upload the new `skills` folder as in step 2. Uploading over existing objects replaces them. The bucket keeps
    previous versions.
 

@@ -1,0 +1,2 @@
+# Editor integration only. The service itself does not need this.
+mcp==2.3.0

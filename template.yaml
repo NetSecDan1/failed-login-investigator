@@ -302,7 +302,7 @@ Resources:
       Code:
         ZipFile: |
           def handler(event, context):
-              return {"status": "placeholder", "message": "run deploy.sh to upload code"}
+              return {"status": "placeholder", "message": "Placeholder code. Upload the function package."}
   # Operational alarms. Metrics come from the embedded metric lines the function writes.
   AlarmFunctionErrors:
     Type: AWS::CloudWatch::Alarm

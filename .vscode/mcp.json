@@ -1,0 +1,20 @@
+{
+  "inputs": [
+    {"type": "promptString", "id": "fli-api-url", "description": "Investigator API address, starting with https://"},
+    {"type": "promptString", "id": "fli-api-token", "description": "Your access token for the investigator API", "password": true}
+  ],
+  "servers": {
+    "investigator-synthetic": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["integrations/mcp_server.py"],
+      "env": {"FLI_MODE": "local", "FLI_DEV_CALLER": "E1001"}
+    },
+    "investigator-service": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["integrations/mcp_server.py"],
+      "env": {"FLI_MODE": "api", "FLI_API_URL": "${input:fli-api-url}", "FLI_API_TOKEN": "${input:fli-api-token}"}
+    }
+  }
+}

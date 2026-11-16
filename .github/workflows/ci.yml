@@ -53,7 +53,7 @@ jobs:
         with: {python-version: "3.13"}
       - run: pip install bandit==1.9.4
       - name: Shipped code, all severities
-        run: bandit -q -r src agent
+        run: bandit -q -r src agent integrations
       - name: Developer tools, medium and above
         run: bandit -q -ll -r tools
   dependencies:
@@ -66,6 +66,7 @@ jobs:
       - run: pip install pip-audit==2.10.1
       - run: pip-audit -r agent/requirements.txt
       - run: pip-audit -r agent/constraints.txt
+      - run: pip-audit -r integrations/requirements.txt
   secrets:
     name: secret scan (full history)
     runs-on: ubuntu-latest

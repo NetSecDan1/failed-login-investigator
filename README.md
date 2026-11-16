@@ -72,10 +72,11 @@ For a click-by-click console walkthrough: [`docs/DEPLOY_CONSOLE.md`](docs/DEPLOY
 | `tools/` | Local CLI, data generator, skill index builder, live eval runner |
 | `tests/` | Offline tests, no network |
 | `agent/` | Entry point for a managed agent runtime, built on a standard agent framework |
+| `integrations/` | Editor tool server (Model Context Protocol) |
 | `infra/` | Optional pipeline deploy role |
 | `schemas/` | The response contract as JSON Schema |
 | `config/` | Source field mapping and the registry of every setting the code reads |
-| `docs/` | Status, architecture and data flows, configuration, use case, risks, operations, measurement, deploy, skills and backends guides, design brief |
+| `docs/` | Status, architecture and data flows, configuration, sources, editor guide, use case, risks, operations, measurement, deploy, skills and backends guides, design brief |
 
 ## Tests
 
@@ -113,6 +114,13 @@ the evidence does not support, a model trying to talk down a mandatory escalatio
 Both run the same pipeline, and in both the reply is rendered by code from validated results. The model is
 reached through `MODEL_ROUTE`: `bedrock` for a direct call, or `gateway` for a central model gateway with an
 OpenAI-compatible API. Which combination an organization permits is an owner decision recorded in `docs/STATUS.md`.
+
+## In the editor
+
+The workspace is set up for Visual Studio Code with GitHub Copilot: assistant instructions that carry this
+repository's rules, reusable prompts, one-click tasks for every gate, and an optional tool server so the
+investigator can be called from chat. Synthetic data only unless it is pointed at a deployed service with your own
+token. See [`docs/VSCODE.md`](docs/VSCODE.md).
 
 ## Delivery gates
 

@@ -39,6 +39,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Operations | Per-caller rate limit, and a reference that ties each result to its audit line | Partially implemented | `src/ratelimit.py`, `tests/test_ratelimit.py`. Limit off by default. Shared counter table tested with a scripted client only |
 | Operations | Every setting documented, and a preflight that blocks prototype defaults | Implemented and evidenced | `config/settings.json`, `docs/CONFIGURATION.md`, `tools/preflight.py`, `tests/test_config.py`. Checks settings only, not a running deployment |
 | Operations | Runbook, rollback, named ownership | Partially implemented | `docs/OPERATIONS.md`. Owners are placeholders |
+| Delivery | Editor workspace: assistant rules, prompts, gate tasks, and a tool server for chat | Partially implemented | `.github/copilot-instructions.md`, `.github/prompts/`, `.vscode/`, `integrations/mcp_server.py`, `tests/test_editor_integration.py`. Not exercised from a live editor session. Service mode tested against a scripted service only. In chat the assistant, not code, writes the final wording |
 | Delivery | Console deployment guide and a ready-to-upload bundle | Partially implemented | `docs/DEPLOY_CONSOLE.md`, CI artifact `console-bundle`, `examples/events/` checked by a test. The click path was last exercised on an early build, not on this revision |
 | Delivery | Architecture, data flows and interface contract documented | Implemented and evidenced | `docs/ARCHITECTURE.md`, `schemas/result.schema.json`, `tests/test_contract.py`. Not reviewed by an architecture owner |
 | Risk | Risk documentation | Partially implemented | `docs/RISKS.md`. Not reviewed by a risk owner |
@@ -68,11 +69,11 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 
 ## Tests run for this revision
 
-`python -m pytest -q --cov=src --cov=agent tests` (235 tests including property tests, 94% coverage),
-`python tools/run_evals.py` (15 of 15 golden cases, scripted stand-in model), `python tools/redteam.py` (21 of 21
-attacks contained), `ruff check .`, `bandit -r src agent`, `pip-audit` on agent requirements and constraints,
-`cfn-lint template.yaml infra/github-oidc.yaml`, and in CI an agent image build, smoke test and vulnerability scan.
-All offline or against a locally built image. See the CI run for the commit.
+`python -m pytest -q --cov=src --cov=agent tests` (273 tests including property, contract and adapter tests, 95%
+coverage), `python tools/run_evals.py` (15 of 15 golden cases, scripted stand-in model), `python tools/redteam.py`
+(21 of 21 attacks contained), `ruff check .`, `bandit -r src agent integrations`, `pip-audit` on every pinned
+requirements file, `cfn-lint template.yaml infra/github-oidc.yaml`, and in CI an agent image build, smoke test
+and vulnerability scan. All offline or against a locally built image. See the CI run for the commit.
 
 ## Next smallest useful steps
 

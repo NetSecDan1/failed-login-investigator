@@ -1,0 +1,14 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {"label": "Test: unit and property tests with coverage", "type": "shell", "command": "python -m pytest -q --cov=src --cov=agent tests", "group": {"kind": "test", "isDefault": true}, "problemMatcher": []},
+    {"label": "Check: lint", "type": "shell", "command": "ruff check .", "problemMatcher": []},
+    {"label": "Check: static security analysis", "type": "shell", "command": "bandit -q -r src agent", "problemMatcher": []},
+    {"label": "Evaluate: golden cases (scripted stand-in model)", "type": "shell", "command": "python tools/run_evals.py", "problemMatcher": []},
+    {"label": "Evaluate: adversarial suite", "type": "shell", "command": "python tools/redteam.py", "problemMatcher": []},
+    {"label": "Skills: rebuild index", "type": "shell", "command": "python tools/build_skill_index.py", "problemMatcher": []},
+    {"label": "Config: regenerate settings reference", "type": "shell", "command": "python tools/preflight.py --write-docs", "problemMatcher": []},
+    {"label": "Run: sample investigation on synthetic data", "type": "shell", "command": "python tools/investigate.py --caller E1001 --account svc-batch01", "problemMatcher": []},
+    {"label": "All gates before a pull request", "dependsOrder": "sequence", "dependsOn": ["Check: lint", "Check: static security analysis", "Test: unit and property tests with coverage", "Evaluate: golden cases (scripted stand-in model)", "Evaluate: adversarial suite"], "problemMatcher": []}
+  ]
+}
