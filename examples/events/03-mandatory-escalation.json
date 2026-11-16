@@ -1,0 +1,8 @@
+{
+  "claims": {
+    "employee_id": "E1001"
+  },
+  "account": "svc-web02",
+  "window_hours": 24,
+  "end": "2026-11-12T18:00:00Z"
+}

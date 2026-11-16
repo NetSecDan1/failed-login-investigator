@@ -39,6 +39,7 @@ Labels: **Implemented and evidenced**, **Partially implemented**, **Not implemen
 | Operations | Per-caller rate limit, and a reference that ties each result to its audit line | Partially implemented | `src/ratelimit.py`, `tests/test_ratelimit.py`. Limit off by default. Shared counter table tested with a scripted client only |
 | Operations | Every setting documented, and a preflight that blocks prototype defaults | Implemented and evidenced | `config/settings.json`, `docs/CONFIGURATION.md`, `tools/preflight.py`, `tests/test_config.py`. Checks settings only, not a running deployment |
 | Operations | Runbook, rollback, named ownership | Partially implemented | `docs/OPERATIONS.md`. Owners are placeholders |
+| Delivery | Console deployment guide and a ready-to-upload bundle | Partially implemented | `docs/DEPLOY_CONSOLE.md`, CI artifact `console-bundle`, `examples/events/` checked by a test. The click path was last exercised on an early build, not on this revision |
 | Delivery | Architecture, data flows and interface contract documented | Implemented and evidenced | `docs/ARCHITECTURE.md`, `schemas/result.schema.json`, `tests/test_contract.py`. Not reviewed by an architecture owner |
 | Risk | Risk documentation | Partially implemented | `docs/RISKS.md`. Not reviewed by a risk owner |
 | Cost | Cost per successfully completed investigation | Partially implemented | `tools/cost_report.py`, `docs/MEASUREMENT.md`. No live usage data exists |

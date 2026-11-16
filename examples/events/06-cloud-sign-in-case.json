@@ -1,0 +1,8 @@
+{
+  "claims": {
+    "employee_id": "E5000"
+  },
+  "account": "ev-legacy",
+  "window_hours": 24,
+  "end": "2026-11-12T18:00:00Z"
+}

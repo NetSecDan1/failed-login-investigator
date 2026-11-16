@@ -131,6 +131,12 @@ jobs:
           .sbom/bin/pip freeze > agent-dependency-inventory.txt
           pip install -q cyclonedx-bom==8.0.1
           cyclonedx-py environment .sbom --output-format JSON --output-file agent-sbom.cdx.json
+          # A ready-to-upload bundle: template, function package, bucket contents and test events.
+          python tools/build_skill_index.py --check && python tools/make_data.py
+          mkdir -p console-bundle/bucket console-bundle/test-events
+          cp template.yaml function.zip docs/DEPLOY_CONSOLE.md console-bundle/
+          cp -r skills console-bundle/bucket/skills && cp -r data/ownership data/evidence console-bundle/bucket/
+          cp examples/events/*.json console-bundle/test-events/
           sha256sum function.zip skills.tar.gz agent-dependency-inventory.txt agent-sbom.cdx.json > SHA256SUMS
           echo "commit ${GITHUB_SHA}" >> SHA256SUMS
           cat SHA256SUMS
@@ -143,4 +149,9 @@ jobs:
             agent-dependency-inventory.txt
             agent-sbom.cdx.json
             SHA256SUMS
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: console-bundle-${{ github.sha }}
+          path: console-bundle/
           retention-days: 30

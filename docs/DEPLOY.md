@@ -49,21 +49,10 @@ python tools/make_data.py && python -m pytest -q tests
 
 Needs AWS CLI v2, Python 3.11 or newer, `zip`, and bash (Git Bash or WSL on Windows).
 
-## Option C: CloudFormation console (click path)
+## Option C: The AWS console
 
-Best when you want to see every resource before it is created.
-
-1. CloudFormation, Create stack, upload `template.yaml`, stack name `fli-proto`, set `ModelId`.
-2. Acknowledge the IAM capability and create. The function is created with placeholder code.
-3. Upload code and data. The console cannot do this from the template alone, so finish with:
-   ```bash
-   python tools/make_data.py
-   aws s3 sync data/ s3://<Bucket output>/ --delete --exclude "skills/*"
-   aws s3 sync skills/ s3://<Bucket output>/skills/ --delete
-   (cd src && zip -qr ../fn.zip .)
-   aws lambda update-function-code --function-name fli-proto-fn --zip-file fileb://fn.zip
-   ```
-   Or zip `src/` and upload it on the Lambda console Code tab, and upload the `data/` folders and `skills/` in the S3 console.
+Best when you want to see every resource before it is created. CI publishes a ready bundle with the template,
+the packaged function, the bucket contents and test events. Follow [`DEPLOY_CONSOLE.md`](DEPLOY_CONSOLE.md).
 
 ## Option D: GitHub Actions with OIDC (no stored keys)
 

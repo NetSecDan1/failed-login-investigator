@@ -1,0 +1,6 @@
+{
+  "action": "list_accounts",
+  "claims": {
+    "employee_id": "E1001"
+  }
+}

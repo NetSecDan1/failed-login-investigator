@@ -58,6 +58,7 @@ use case details for Anthropic models. Until that is done the function returns f
 ```
 
 Other ways to deploy, the HTTP API and its parameters: [`docs/DEPLOY.md`](docs/DEPLOY.md).
+For a click-by-click console walkthrough: [`docs/DEPLOY_CONSOLE.md`](docs/DEPLOY_CONSOLE.md).
 
 ## Layout
 
@@ -67,6 +68,7 @@ Other ways to deploy, the HTTP API and its parameters: [`docs/DEPLOY.md`](docs/D
 | `skills/` | 13 skills, each `SKILL.md` plus `rules.json` |
 | `queries/`, `config/field_map.json` | Fixed query templates and the source field mapping |
 | `evals/cases.json` | One synthetic case per skill |
+| `examples/events/` | Ready-made requests for the synthetic data set |
 | `tools/` | Local CLI, data generator, skill index builder, live eval runner |
 | `tests/` | Offline tests, no network |
 | `agent/` | Entry point for a managed agent runtime, built on a standard agent framework |

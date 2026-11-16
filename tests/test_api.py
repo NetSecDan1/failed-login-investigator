@@ -90,3 +90,15 @@ def test_cli_runs_offline(capsys, monkeypatch):
     assert mod.main(["--caller", "E1001", "--account", "svc-payroll"]) == 2
     assert mod.main(["--caller", "E1001", "--list"]) == 0
     assert "svc-web02" in capsys.readouterr().out
+
+
+def test_example_events_behave_as_their_readme_says(monkeypatch):
+    import glob
+    from conftest import ROOT
+    monkeypatch.setenv("ALLOW_TEST_CLAIMS", "true")
+    got = {}
+    for path in sorted(glob.glob(os.path.join(ROOT, "examples", "events", "*.json"))):
+        r = handler.handler(json.load(open(path)), None, store=STORE, model=no_model)
+        got[os.path.basename(path)[:2]] = (r["status"], r.get("reason"), (r.get("candidates") or {}).get("allowed", [None])[0], r.get("must_escalate"))
+    assert got == {"01": ("ok", None, None, None), "02": ("ok", None, "stale-credential", False), "03": ("ok", None, "suspicious-source-escalate", True),
+                   "04": ("denied", "out_of_scope", None, None), "05": ("denied", "scope_empty", None, None), "06": ("ok", None, "legacy-auth-client", False)}
